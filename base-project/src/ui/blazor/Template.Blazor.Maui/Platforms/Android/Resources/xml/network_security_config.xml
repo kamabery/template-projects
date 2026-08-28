@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Why this file exists: the app's Android configuration points at http://10.0.2.2:5191 (the
+     emulator's alias for the host machine's loopback), and Android has blocked cleartext HTTP by
+     default since API 28. Without an exemption every call to the test harness fails with
+     "java.io.IOException: Cleartext HTTP traffic to 10.0.2.2 not permitted" - the request never
+     leaves the device, so the harness logs nothing and only the client shows an error.
+
+     Scoped to the development loopback hosts rather than setting
+     android:usesCleartextTraffic="true" on <application>. That attribute would permit cleartext to
+     *every* host in Release builds too; this permits it only where the dev-time harness lives and
+     leaves all other traffic HTTPS-only, so the file is safe to ship as-is. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- The host machine, as seen from inside the Android emulator. -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+
+        <!-- A physical device on the same network reaches the harness by the host's LAN address,
+             which is not knowable here - add it alongside these when you need it. -->
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

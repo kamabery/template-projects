@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+       Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
+       using the casing of the token it matched - and the prefix here is lowercase. Without these
+       two properties the assembly would take the file name's casing while every string naming it
+       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
+       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+  <PropertyGroup>
+    <AssemblyName>template.api</AssemblyName>
+    <RootNamespace>template.api</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+    <!-- Every provider is referenced, not one: PersistenceConfigurator picks between them at
+         run time from Database:Provider, so all of them have to compile and all of them have
+         to run. The dbProvider scaffolding parameter collapses this to whichever one was
+         asked for. SQLite needs no Aspire integration - there is no service to discover -
+         so it takes the plain EF provider instead. -->
+    <!--#if (dbProvider == "postgres") -->
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlserver") -->
+    <PackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlite") -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!--#endif -->
+    <!-- Design-time only. `dotnet ef migrations add` runs against this project as the startup
+         project (the migrations themselves live in the template.api.migrations.* projects),
+         and the tooling needs this reference to build the model. PrivateAssets keeps it out of
+         the build output and off anything that references this project. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\template.data\template.data.csproj" />
+    <!-- Referenced so every migrations assembly lands in this project's output: EF resolves
+         MigrationsAssembly by name at run time with Assembly.Load, which finds them only if
+         they are there. None of them is referenced in code. -->
+    <!--#if (dbProvider == "postgres") -->
+    <ProjectReference Include="..\template.api.migrations.postgres\template.api.migrations.postgres.csproj" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlserver") -->
+    <ProjectReference Include="..\template.api.migrations.sqlserver\template.api.migrations.sqlserver.csproj" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlite") -->
+    <ProjectReference Include="..\template.api.migrations.sqlite\template.api.migrations.sqlite.csproj" />
+    <!--#endif -->
+    <ProjectReference Include="..\template.servicedefaults\template.servicedefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Top-level statements make the generated Program class internal, so
+         WebApplicationFactory<Program> in the test project cannot see it without this. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>template.api.tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

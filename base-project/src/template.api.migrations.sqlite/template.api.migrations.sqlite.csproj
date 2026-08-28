@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Migrations only. EF discovers migrations by scanning a single assembly and two providers'
+       migrations cannot share one - the generated SQL differs and the migration ids collide - so
+       each provider gets its own, which is Microsoft's documented answer. PersistenceConfigurator
+       points EF at the right one with MigrationsAssembly.
+
+       This references template.data, not template.api, and template.api references this - that
+       direction is what keeps the project graph acyclic while still putting this assembly in
+       the API's output, where EF's Assembly.Load can find it. -->
+
+  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+       Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
+       using the casing of the token it matched - and the prefix here is lowercase. Without these
+       two properties the assembly would take the file name's casing while every string naming it
+       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
+       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+  <PropertyGroup>
+    <AssemblyName>template.api.migrations.sqlite</AssemblyName>
+    <RootNamespace>template.api.migrations.sqlite</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\template.data\template.data.csproj" />
+  </ItemGroup>
+
+</Project>

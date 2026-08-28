@@ -1,0 +1,11 @@
+@* .NET 10's Router NotFoundPage parameter requires the target component to carry a route
+   attribute, so this page needs an @page directive even though the router reaches it directly. *@
+@page "/not-found"
+
+<PageTitle>Not found</PageTitle>
+
+<h1>Not found</h1>
+
+<FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false">
+    There is nothing at this address.
+</FluentMessageBar>

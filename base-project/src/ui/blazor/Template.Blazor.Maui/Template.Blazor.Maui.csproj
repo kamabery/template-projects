@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+    <PropertyGroup>
+        <!-- The stock MAUI project gates ios/maccatalyst on "not linux", which means Windows still
+             tries to build them and a solution-wide `dotnet build` fails without Xcode. Gating
+             each group on the OS that can actually build it keeps `dotnet build` green on Windows
+             and still produces iOS/Mac builds on a Mac.
+
+             IncludeAndroid is off by default because the android leg of a MAUI *Blazor* project
+             additionally requires the wasm-tools workload, which is not installed for this SDK
+             feature band on every machine (`dotnet workload list` shows the band after the slash).
+             Install it once with `dotnet workload restore`, then set IncludeAndroid to true here
+             or pass -p:IncludeAndroid=true. Without the workload, restore fails with NETSDK1147
+             for every project in the solution, not just this one. -->
+        <IncludeAndroid Condition="'$(IncludeAndroid)' == ''">false</IncludeAndroid>
+
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+        <TargetFrameworks Condition="'$(IncludeAndroid)' == 'true'">$(TargetFrameworks);net10.0-android</TargetFrameworks>
+        <TargetFrameworks>$(TargetFrameworks.Trim(';'))</TargetFrameworks>
+
+        <!-- The MAUI packages below are versioned by $(MauiVersion), which the workload
+             sets in its .targets - after Directory.Packages.props is evaluated. Central
+             package management therefore cannot express them, so this one project opts out. -->
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+
+        <OutputType>Exe</OutputType>
+        <RootNamespace>Template.Blazor.Maui</RootNamespace>
+        <UseMaui>true</UseMaui>
+        <SingleProject>true</SingleProject>
+        <EnableDefaultCssItems>false</EnableDefaultCssItems>
+        <MauiXamlInflator>SourceGen</MauiXamlInflator>
+
+        <!-- Display name -->
+        <ApplicationTitle>Template.Blazor.Maui</ApplicationTitle>
+
+        <!-- App Identifier -->
+        <ApplicationId>com.companyname.template.blazor.maui</ApplicationId>
+
+        <!-- Versions -->
+        <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+        <ApplicationVersion>1</ApplicationVersion>
+
+        <!-- Unpackaged, so `dotnet run` works without Store packaging. -->
+        <WindowsPackageType>None</WindowsPackageType>
+
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+        <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
+        <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+    </PropertyGroup>
+
+    <!-- DeveloperTools.cs implements a partial method that MauiProgram.cs declares and calls. Not
+       compiling it in Release erases both the implementation and every call to it, which is what
+       conditional compilation used to do - expressed here instead, because the scaffolding
+       engine strips preprocessor regions out of .cs files. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <Compile Remove="DeveloperTools.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+        <!-- App Icon -->
+        <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+
+        <!-- Splash Screen -->
+        <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+
+        <!-- Images -->
+        <MauiImage Include="Resources\Images\*" />
+        <MauiImage Update="Resources\Images\dotnet_bot.svg" BaseSize="168,208" />
+
+        <!-- Custom Fonts -->
+        <MauiFont Include="Resources\Fonts\*" />
+
+        <!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
+        <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <!-- The Android build needs Platforms\Android\Resources compiled as AndroidResource, which is
+         what makes the manifest's @xml/network_security_config reference resolve. The .NET Android
+         SDK auto-globs from $(MonoAndroidResourcePrefix), which defaults to "Resources" and which
+         neither the MAUI SDK nor the stock MAUI project overrides, so whether the platform folder is
+         picked up depends on the SDK version. Exclude="@(AndroidResource)" makes this idempotent:
+         it adds only what the SDK has not already globbed, so it cannot produce a duplicate-resource
+         aapt2 error on an SDK that does include the folder. -->
+    <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+        <AndroidResource Include="Platforms\Android\Resources\**\*.xml" Exclude="@(AndroidResource)" />
+    </ItemGroup>
+
+    <!-- appsettings.json ships as an embedded resource and is read from the manifest
+         stream in MauiProgram.cs - a MAUI app has no content-root to read files from. -->
+    <ItemGroup>
+        <Content Remove="appsettings.json" />
+        <EmbeddedResource Include="appsettings.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Template.Blazor.Maui.Pages\Template.Blazor.Maui.Pages.csproj" />
+    </ItemGroup>
+
+</Project>

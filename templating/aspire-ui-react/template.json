@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "template-projects",
+  "classifications": [ "Aspire", "React", "Vite", "Web" ],
+  "identity": "AspireStarter.Ui.React",
+  "groupIdentity": "AspireStarter.Ui.React",
+  "name": "Aspire starter add-on: React front end",
+  "description": "Adds a Vite + React 19 + TanStack + Tailwind front end to a scaffold created with aspire-base. Installable as a PWA. Emits .scaffold/aspire-ui-react.wiring.md, which lists the AppHost edits the scaffolding skill applies.",
+  "shortName": "aspire-ui-react",
+  "sourceName": "template",
+  "preferNameDirectory": false,
+  "defaultName": "AspireApp",
+  "tags": { "language": "C#", "type": "item" },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "comment": "package-lock.json names @babel/template and @babel/plugin-transform-template-literals. sourceName substitution would rewrite those package names and break npm install, so the file is copied byte for byte.",
+          "copyOnly": [ "src/ui/react/package-lock.json" ]
+        }
+      ]
+    }
+  ]
+}

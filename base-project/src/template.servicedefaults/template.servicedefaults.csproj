@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+       Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
+       using the casing of the token it matched - and the prefix here is lowercase. Without these
+       two properties the assembly would take the file name's casing while every string naming it
+       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
+       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+  <PropertyGroup>
+    <AssemblyName>template.servicedefaults</AssemblyName>
+    <RootNamespace>template.servicedefaults</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireSharedProject>true</IsAspireSharedProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,101 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <!-- 'Development' is what selects the MAUI host's DeveloperTools.cs. It must be declared
+         here and in every project's <Configurations> (supplied by Directory.Build.props) or
+         `dotnet build -c Development` fails with MSB4126. -->
+    <BuildType Name="Development" />
+    <BuildType Name="Release" />
+  </Configurations>
+
+  <!-- CLAUDE.md, .claude/ and specs/ are deliberately absent: this solution sits at the workspace
+       root beside them, but they are workspace-level files rather than scaffold source and must
+       not end up in a scaffold. -->
+  <Folder Name="/Solution Items/">
+    <File Path="base-project/Directory.Build.props" />
+    <File Path="base-project/Directory.Packages.props" />
+    <File Path="base-project/README.md" />
+    <File Path="base-project/nuget.config" />
+  </Folder>
+
+  <!-- The Aspire AppHost is a file-based app, not a project, so it is listed as solution items
+       rather than under <Project>. Nothing here is compiled by the solution build; the files are
+       listed only so the AppHost is visible in the IDE instead of being a folder you have to
+       remember exists. -->
+  <Folder Name="/aspire/">
+    <File Path=".aspire/apphost.cs" />
+    <File Path=".aspire/apphost.run.json" />
+    <File Path=".aspire/appsettings.json" />
+    <File Path=".aspire/appsettings.Development.json" />
+    <File Path=".aspire/Directory.Packages.props" />
+    <File Path="aspire.config.json" />
+  </Folder>
+
+  <Folder Name="/src/">
+    <Project Path="base-project/src/template.api/template.api.csproj" />
+    <!-- The entity, DbContext, seeder and repository. Its own project so that template.api can
+         reference the migrations projects without a cycle - see template.data.csproj. -->
+    <Project Path="base-project/src/template.data/template.data.csproj" />
+    <!-- Migrations only, one project per provider: EF scans a single assembly for migrations and
+         two providers' migrations cannot share it. See PersistenceConfigurator. Only the provider
+         a scaffold asked for survives; in this workspace all three are present because
+         Database:Provider picks between them at run time. -->
+    <!--#if (dbProvider == "postgres") -->
+    <Project Path="base-project/src/template.api.migrations.postgres/template.api.migrations.postgres.csproj" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlserver") -->
+    <Project Path="base-project/src/template.api.migrations.sqlserver/template.api.migrations.sqlserver.csproj" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlite") -->
+    <Project Path="base-project/src/template.api.migrations.sqlite/template.api.migrations.sqlite.csproj" />
+    <!--#endif -->
+    <Project Path="base-project/src/template.servicedefaults/template.servicedefaults.csproj" />
+    <!--#if (includeEvents) -->
+    <Project Path="event-project/src/template.events/template.events.csproj" />
+    <!--#endif -->
+    <!-- <<addon-src-projects>> - scaffolding inserts add-on src projects above this line. -->
+  </Folder>
+
+  <!-- src/ui/react is absent on purpose: it is an npm workspace, not an MSBuild project. The
+       AppHost owns it via AddViteApp. -->
+  <Folder Name="/src/ui/blazor/">
+    <!--#if (includeBlazorWeb || includeMaui) -->
+    <Project Path="base-project/src/ui/blazor/Template.Blazor.Maui.Pages/Template.Blazor.Maui.Pages.csproj" />
+    <!--#endif -->
+    <!--#if (includeBlazorWeb) -->
+    <Project Path="base-project/src/ui/blazor/Template.Blazor.Maui.Web/Template.Blazor.Maui.Web.csproj" />
+    <!--#endif -->
+    <!--#if (includeMaui) -->
+    <Project Path="base-project/src/ui/blazor/Template.Blazor.Maui/Template.Blazor.Maui.csproj" />
+    <!--#endif -->
+    <!-- <<addon-ui-projects>> - scaffolding inserts add-on UI projects above this line. -->
+  </Folder>
+
+  <Folder Name="/tests/">
+    <!-- Two test projects, not one. The API suite and the Blazor suite were a single assembly
+         until the UI became an optional part of a scaffold: a project referencing both
+         template.api and Template.Blazor.Maui.Pages cannot be pruned when either side is left
+         out. Splitting them is what makes each independently omittable. -->
+    <Project Path="base-project/tests/template.api.tests/template.api.tests.csproj" />
+    <!--#if (includeBlazorWeb || includeMaui) -->
+    <Project Path="base-project/tests/Template.Blazor.Maui.Tests/Template.Blazor.Maui.Tests.csproj" />
+    <!--#endif -->
+    <!--#if (includeEvents) -->
+    <Project Path="event-project/tests/template.events.tests/template.events.tests.csproj" />
+    <!--#endif -->
+    <!-- <<addon-test-projects>> - scaffolding inserts add-on test projects above this line. -->
+  </Folder>
+
+  <!--#if (includeEvents) -->
+  <!-- event-project/ is a sibling of base-project/, not part of it. It joins this solution because
+       the solution sits at the workspace root spanning both, but it is outside base-project/ and so
+       outside that directory's pack root - which is why it carries its own Directory.Build.props
+       and Directory.Packages.props rather than inheriting them. A scaffold folds the events slice
+       into src/ and tests/ instead, so these two files do not travel with it. -->
+  <Folder Name="/event/">
+    <File Path="event-project/Directory.Build.props" />
+    <File Path="event-project/Directory.Packages.props" />
+    <File Path="event-project/README.md" />
+  </Folder>
+  <!--#endif -->
+</Solution>

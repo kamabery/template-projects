@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "template-projects",
+  "classifications": [
+    "Aspire",
+    "Web API",
+    "Cloud",
+    "Solution"
+  ],
+  "identity": "AspireStarter.Base",
+  "groupIdentity": "AspireStarter",
+  "name": "Aspire starter: solution, API and data store",
+  "description": "The root of a scaffold: an Aspire AppHost, an ASP.NET Core API with EF Core persistence against the data store you choose, shared service defaults and the API test suite. Runnable on its own; add a front end with aspire-ui-react or aspire-ui-blazor and event sourcing with aspire-events.",
+  "shortName": "aspire-base",
+  "sourceName": "template",
+  "preferNameDirectory": true,
+  "defaultName": "AspireApp",
+  "tags": {
+    "language": "C#",
+    "type": "solution"
+  },
+  "symbols": {
+    "dbProvider": {
+      "type": "parameter",
+      "datatype": "choice",
+      "displayName": "Data store",
+      "description": "Which store the API reads its data from. Only the provider you pick is scaffolded: the others' migrations projects, packages and code branches are removed rather than shipped unused.",
+      "defaultValue": "postgres",
+      "choices": [
+        {
+          "choice": "postgres",
+          "displayName": "PostgreSQL",
+          "description": "PostgreSQL in a container, wired through the Aspire Npgsql integration. Needs Docker."
+        },
+        {
+          "choice": "sqlserver",
+          "displayName": "SQL Server Express",
+          "description": "SQL Server 2022 Express in a container, wired through the Aspire SQL Server integration. Needs Docker."
+        },
+        {
+          "choice": "sqlite",
+          "displayName": "SQLite",
+          "description": "A local file. No container and no Docker, so `aspire run` comes up anywhere - at the cost of the EF health check the container integrations register."
+        }
+      ]
+    },
+    "dbProviderSetting": {
+      "type": "generated",
+      "generator": "switch",
+      "replaces": "\"Provider\": \"postgres\"",
+      "parameters": {
+        "evaluator": "C++",
+        "datatype": "string",
+        "cases": [
+          {
+            "condition": "(dbProvider == 'sqlserver')",
+            "value": "\"Provider\": \"sqlserver\""
+          },
+          {
+            "condition": "(dbProvider == 'sqlite')",
+            "value": "\"Provider\": \"sqlite\""
+          },
+          {
+            "condition": "",
+            "value": "\"Provider\": \"postgres\""
+          }
+        ]
+      }
+    },
+    "dbProviderDefault": {
+      "type": "generated",
+      "generator": "switch",
+      "replaces": "Default = Postgres;",
+      "parameters": {
+        "evaluator": "C++",
+        "datatype": "string",
+        "cases": [
+          {
+            "condition": "(dbProvider == 'sqlserver')",
+            "value": "Default = SqlServer;"
+          },
+          {
+            "condition": "(dbProvider == 'sqlite')",
+            "value": "Default = Sqlite;"
+          },
+          {
+            "condition": "",
+            "value": "Default = Postgres;"
+          }
+        ]
+      }
+    },
+    "dbProviderFallback": {
+      "type": "generated",
+      "generator": "switch",
+      "replaces": "[\"Database:Provider\"] ?? \"postgres\"",
+      "parameters": {
+        "evaluator": "C++",
+        "datatype": "string",
+        "cases": [
+          {
+            "condition": "(dbProvider == 'sqlserver')",
+            "value": "[\"Database:Provider\"] ?? \"sqlserver\""
+          },
+          {
+            "condition": "(dbProvider == 'sqlite')",
+            "value": "[\"Database:Provider\"] ?? \"sqlite\""
+          },
+          {
+            "condition": "",
+            "value": "[\"Database:Provider\"] ?? \"postgres\""
+          }
+        ]
+      }
+    },
+    "skipRestore": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Skip restore",
+      "description": "Skip the automatic `dotnet restore` after scaffolding."
+    },
+    "nameLowerFile": {
+      "type": "generated",
+      "generator": "casing",
+      "parameters": {
+        "source": "name",
+        "toLower": true
+      },
+      "fileRename": "template"
+    }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "condition": "(dbProvider != 'postgres')",
+          "exclude": [
+            "src/template.api.migrations.postgres/**"
+          ]
+        },
+        {
+          "condition": "(dbProvider != 'sqlserver')",
+          "exclude": [
+            "src/template.api.migrations.sqlserver/**"
+          ]
+        },
+        {
+          "condition": "(dbProvider != 'sqlite')",
+          "exclude": [
+            "src/template.api.migrations.sqlite/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "postActions": [
+    {
+      "id": "restore",
+      "condition": "(!skipRestore)",
+      "description": "Restore NuGet packages",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet restore'"
+        }
+      ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    }
+  ]
+}

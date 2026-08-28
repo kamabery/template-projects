@@ -1,0 +1,18 @@
+<Project>
+
+  <!-- Properties every project in this solution would otherwise repeat.
+       The sibling repos (Spruce.Next, Blazor.FluentUI) duplicate these in each
+       .csproj; centralising them here is why versions cannot drift apart. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- 'Development' is a real third configuration in this codebase: the MAUI host compiles
+         DeveloperTools.cs in Debug and Development and not in Release, which is what selects the
+         developer-tools registration. Every project must declare the configuration or the
+         solution mapping breaks with MSB4126. -->
+    <Configurations>Debug;Release;Development</Configurations>
+  </PropertyGroup>
+
+</Project>

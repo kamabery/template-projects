@@ -1,0 +1,6 @@
+type ClassValue = string | false | null | undefined
+
+/** Joins conditional class names. */
+export function cn(...values: Array<ClassValue>): string {
+  return values.filter(Boolean).join(' ')
+}

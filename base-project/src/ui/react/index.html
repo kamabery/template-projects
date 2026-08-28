@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>template.ui</title>
+
+    <!--
+      PWA. The manifest link and the service-worker registration script are both
+      injected by vite-plugin-pwa (see vite.config.ts); everything a manifest
+      cannot express is declared here.
+
+      These theme colors are static snapshots of --color-surface from
+      src/index.css. They follow the OS setting only: the in-app override that
+      src/store/preferences.ts writes to <html data-theme> does not move the
+      address-bar color with it.
+    -->
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#fafcfe"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#12161d"
+    />
+    <link rel="apple-touch-icon" href="/icon-maskable.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="template.ui" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,80 @@
+/* Host-specific styling only. Anything the two hosts share belongs in
+   Template.Blazor.Maui.Pages/wwwroot/app.css, which arrives as
+   _content/Template.Blazor.Maui.Pages/app.css. */
+
+html, body {
+    margin: 0;
+    height: 100%;
+}
+
+.nav-item {
+    display: block;
+    padding: .4rem .75rem;
+    border-radius: 4px;
+    color: var(--neutral-foreground-rest);
+    text-decoration: none;
+}
+
+.nav-item:hover {
+    background: var(--neutral-fill-stealth-hover);
+}
+
+.nav-item.active {
+    background: var(--accent-fill-rest);
+    color: var(--foreground-on-accent-rest);
+}
+
+/* Blazor's boot / error UI */
+
+.loading-progress {
+    position: relative;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    margin: 20vh auto 1rem auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #e0e0e0;
+    stroke-width: .6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: #1b6ec2;
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    inset: 0;
+    top: calc(20vh + 3.25rem);
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Loading");
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}

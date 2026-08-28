@@ -1,0 +1,108 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="ASP.NET Core / Blazor">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <!-- UI only: renders the document Microsoft.AspNetCore.OpenApi generates. Note SwaggerUI,
+         one letter away from Swashbuckle.AspNetCore.SwaggerGen, which is deliberately absent -
+         this package has zero dependencies and brings no second document generator with it. -->
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="Extensions">
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup Label="Persistence">
+    <!-- Aspire client integrations rather than the raw EF providers. AddNpgsqlDbContext /
+         AddSqlServerDbContext read the connection string the AppHost injects and also register an
+         EF health check, EF/ADO OpenTelemetry spans and retry-on-transient-failure - all of which
+         this repo already wires by hand for HTTP and would otherwise have to repeat here.
+         The EF providers themselves (Npgsql.EntityFrameworkCore.PostgreSQL,
+         Microsoft.EntityFrameworkCore.SqlServer) arrive transitively, so they need no entry. -->
+    <!--#if (dbProvider == "postgres") -->
+    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.1" />
+    <!--#endif -->
+    <!-- template.data needs EF Core itself; the two migrations projects each need the one
+         provider whose SQL they generate. These match what the Aspire integrations above
+         resolve to, so nothing downgrades. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <!--#if (dbProvider == "postgres") -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlserver") -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <!--#endif -->
+    <!--#if (dbProvider == "sqlserver") -->
+    <PackageVersion Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="13.5.1" />
+    <!--#endif -->
+    <!-- Design-time only (PrivateAssets=all where it is referenced): `dotnet ef` needs it on the
+         startup project to build the model. It ships no runtime code into the app. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <!-- Two jobs. It is the runtime provider for the sqlite branch of PersistenceConfigurator -
+         a local file with no container behind it - and it is what the API integration suite swaps
+         the configured provider for, so `dotnet test` still needs no Docker whichever provider was
+         scaffolded. See Infrastructure/WeatherApiFactory. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup Label="UI + MVVM">
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="HTTP">
+    <!-- Refit.Newtonsoft.Json is deliberately absent: the sibling repos reference it
+         but nothing needs Newtonsoft semantics, and it drags in a second serializer. -->
+    <PackageVersion Include="Refit" Version="9.0.2" />
+    <PackageVersion Include="Refit.HttpClientFactory" Version="9.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test stack - see the pin notes below before changing any of these">
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="bunit" Version="2.6.2" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="AutoFixture" Version="4.18.1" />
+    <PackageVersion Include="AutoFixture.AutoNSubstitute" Version="4.18.1" />
+    <PackageVersion Include="AutoFixture.Xunit2" Version="4.18.1" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="NSubstitute.Analyzers.CSharp" Version="1.0.17" />
+  </ItemGroup>
+
+  <ItemGroup Label="Aspire service defaults - versions moved here from template.servicedefaults.csproj">
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+  </ItemGroup>
+
+  <!-- Pin notes - these three are load-bearing, not laziness:
+
+       * NSubstitute must stay on 5.3.0. AutoFixture.AutoNSubstitute 4.18.1 declares
+         NSubstitute [2.0.3, 6.0.0); bumping to 6.x breaks restore.
+
+       * xUnit stays on v2, not v3. AutoFixture.Xunit2 4.18.1 is the stable AutoData
+         integration; AutoFixture.Xunit3 4.19.0 only declares support for
+         xunit.v3.extensibility.core 1.0.0.
+
+       * Shouldly's string ShouldContain defaults to Case.Insensitive, unlike NUnit's
+         Does.Contain. Pass Case.Sensitive explicitly or the assertion is weaker than
+         it reads. -->
+
+</Project>

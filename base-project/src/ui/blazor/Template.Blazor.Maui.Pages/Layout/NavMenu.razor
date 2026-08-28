@@ -1,0 +1,13 @@
+@* Plain NavLink rather than FluentNavMenu on purpose.
+
+   FluentNavMenu ships a JS module (FluentNavMenu.razor.js). Under bUnit's loose JSInterop an
+   imported module resolves to null, so any component that calls into it throws. Keeping the shared
+   navigation JS-free means it renders in both hosts and is testable without stubbing modules. *@
+
+<nav class="nav-menu">
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="4">
+        <NavLink class="nav-item" href="" Match="NavLinkMatch.All">Home</NavLink>
+        <NavLink class="nav-item" href="counter">Counter</NavLink>
+        <NavLink class="nav-item" href="weather">Weather</NavLink>
+    </FluentStack>
+</nav>

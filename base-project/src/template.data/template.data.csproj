@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The entity, the DbContext, the seeder and the generic repository.
+
+       This exists as its own project for one concrete reason. EF resolves MigrationsAssembly by
+       name at run time, so template.api has to be able to load the two template.api.migrations.*
+       assemblies, which means referencing them - and they in turn need the DbContext type to
+       compile against. Keeping the DbContext here breaks what would otherwise be a project
+       reference cycle: api -> migrations.* -> data, and api -> data. -->
+
+  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+       Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
+       using the casing of the token it matched - and the prefix here is lowercase. Without these
+       two properties the assembly would take the file name's casing while every string naming it
+       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
+       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+  <PropertyGroup>
+    <AssemblyName>template.data</AssemblyName>
+    <RootNamespace>template.data</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- EF Core only. The providers belong to the projects that actually generate provider-specific
+         SQL (the two migrations projects) and to template.api, which picks between them. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://aspire.dev/reference/cli/configuration/schema.json",
+
+  "//": "The AppHost lives in .aspire/ so the repository root stays flat, but this pointer file has to sit at the root: the CLI walks up from the current directory looking for it. .aspire/settings.json is the pre-13.2 spelling of the same idea and is no longer read.",
+
+  "appHost": {
+    "path": ".aspire/apphost.cs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:17143;http://localhost:15087",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21222",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:21223",
+        "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS": "*",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22252"
+      }
+    },
+    "http": {
+      "applicationUrl": "http://localhost:15087",
+      "environmentVariables": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19113",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:19114",
+        "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS": "*",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20245"
+      }
+    }
+  }
+}

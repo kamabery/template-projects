@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "template-projects",
+  "classifications": [
+    "Aspire",
+    "Wolverine",
+    "Marten",
+    "Event Sourcing"
+  ],
+  "identity": "AspireStarter.Events",
+  "groupIdentity": "AspireStarter.Events",
+  "name": "Aspire starter add-on: Wolverine event sourcing",
+  "description": "Adds a Wolverine + Marten event-sourcing slice - aggregate handlers, a transactional outbox and an async projection - against its own always-Postgres event store. Emits .scaffold/aspire-events.wiring.md, which lists the solution, AppHost and package-version edits the scaffolding skill applies.",
+  "shortName": "aspire-events",
+  "sourceName": "template",
+  "preferNameDirectory": false,
+  "defaultName": "AspireApp",
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./"
+    }
+  ],
+  "symbols": {
+    "nameLowerFile": {
+      "type": "generated",
+      "generator": "casing",
+      "parameters": {
+        "source": "name",
+        "toLower": true
+      },
+      "fileRename": "template"
+    }
+  }
+}

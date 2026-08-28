@@ -1,0 +1,21 @@
+@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<h1>Template.Blazor.Maui</h1>
+
+<FluentCard>
+    <p>
+        Every page and component you can navigate to lives in
+        <code>Template.Blazor.Maui.Pages</code>. The MAUI Blazor Hybrid host and the Blazor
+        WebAssembly host both render these same files - neither has any UI of its own.
+    </p>
+    <ul>
+        <li><strong>Counter</strong> exercises the MVVM base classes with no dependencies at all.</li>
+        <li><strong>Weather</strong> exercises a ViewModel, a Refit provider, and <code>template.api</code>.</li>
+    </ul>
+    <p>
+        The React app in <code>src/ui/react</code> renders the same three pages against the same
+        API, so the two front ends can be compared side by side.
+    </p>
+</FluentCard>

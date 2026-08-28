@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+
+    <!-- Progressive web app. The build generates this file from the real asset
+         list, which is why the service worker can precache fingerprinted assets
+         it cannot know the names of ahead of time. It is generated on publish
+         only, so `dotnet run` gets the no-op worker instead - see
+         wwwroot/service-worker.js. -->
+    <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PublishedContent swaps the real worker in under the same filename, so
+         the registration in index.html never has to know which one it got. -->
+    <ServiceWorker Include="wwwroot\service-worker.js"
+                   PublishedContent="wwwroot\service-worker.published.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Template.Blazor.Maui.Pages\Template.Blazor.Maui.Pages.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+{
+  "name": "Template.Blazor.Maui.Web",
+  "short_name": "Template.Blazor.Maui.Web",
+  "description": "Aspire + Blazor WebAssembly reference front end.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1b6ec2",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    }
+  ]
+}

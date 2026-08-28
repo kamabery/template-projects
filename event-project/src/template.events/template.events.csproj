@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+       Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
+       using the casing of the token it matched - and the prefix here is lowercase. Without these
+       two properties the assembly would take the file name's casing while every string naming it
+       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
+       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+  <PropertyGroup>
+    <AssemblyName>template.events</AssemblyName>
+    <RootNamespace>template.events</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Marten" />
+    <!-- Registers the Roslyn code generator Wolverine's default TypeLoadMode.Dynamic needs; core
+         WolverineFx stopped shipping it in v6. Auto-registers on reference. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <PackageReference Include="Marten" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reaches up and out of event-project/ on purpose. AddServiceDefaults()/MapDefaultEndpoints()
+         are what give this service the same OTel wiring and the /health endpoint the AppHost gates
+         on, and CLAUDE.md is explicit that template.servicedefaults is the stock Aspire file to
+         extend rather than copy.
+
+         The cost is that event-project/ is not independently packable while this reference exists.
+         That is the second cross-boundary reference in the workspace - the shared solution and
+         AppHost being the first - and both are billed under Templating status question 0. -->
+    <ProjectReference Include="..\..\..\base-project\src\template.servicedefaults\template.servicedefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Top-level statements make the generated Program class internal, so the test project cannot
+         see it without this. Mirrors template.api.csproj. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>template.events.tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

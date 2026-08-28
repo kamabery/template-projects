@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. `@theme` defines them once and teaches Tailwind the utility
+ * names (bg-surface, text-content-muted, …).
+ *
+ * Each token carries both palettes through `light-dark()`, which resolves
+ * against the element's computed `color-scheme` — set on :root below and
+ * inherited by everything. That keeps one definition per token instead of a
+ * second dark block that has to be kept in sync, and it is why `@theme` not
+ * being nestable in a media query no longer matters here.
+ *
+ * Use these tokens, never raw palette colors like `bg-slate-800`: a raw color
+ * has one value and so breaks whichever theme it was not picked for.
+ */
+@theme {
+  --color-surface: light-dark(oklch(99% 0.004 250), oklch(20% 0.015 260));
+  --color-surface-raised: light-dark(oklch(100% 0 0), oklch(25% 0.018 260));
+  --color-border-subtle: light-dark(oklch(91% 0.008 250), oklch(33% 0.02 260));
+  --color-content: light-dark(oklch(24% 0.02 260), oklch(95% 0.01 250));
+  --color-content-muted: light-dark(oklch(52% 0.02 260), oklch(72% 0.02 255));
+  --color-brand: light-dark(oklch(58% 0.16 255), oklch(72% 0.14 255));
+  --color-brand-contrast: light-dark(oklch(99% 0.005 250), oklch(20% 0.02 260));
+}
+
+/*
+ * Theme selection. No attribute means follow the OS; `data-theme` overrides it.
+ * src/store/preferences.ts is what writes the attribute. The attribute selectors
+ * outrank the bare :root rule, so the override wins in both directions.
+ */
+:root {
+  color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-content antialiased;
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+}

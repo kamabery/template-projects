@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Packs the staged template trees under artifacts/templates/ into a single template pack.
+
+       This project is workspace-level tooling. It is deliberately absent from template.slnx: that
+       solution is itself template content, so anything listed in it lands in every scaffold. -->
+
+  <PropertyGroup>
+    <PackageType>Template</PackageType>
+    <PackageId>AspireStarter.Templates</PackageId>
+    <Version>1.0.0</Version>
+    <Title>Aspire starter templates</Title>
+    <Authors>template-projects</Authors>
+    <Description>
+      A composable series of dotnet new templates for an Aspire solution: an API with a data store
+      of your choosing (PostgreSQL, SQL Server or SQLite), a React or Blazor front end, an optional
+      MAUI Blazor Hybrid mobile host, and an optional Wolverine/Marten event-sourcing slice.
+    </Description>
+    <PackageTags>dotnet-new;templates;aspire;blazor;react;maui;wolverine;marten</PackageTags>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+
+    <!-- Load-bearing. dotnet pack excludes dotfiles by default, which would silently drop the whole
+         .aspire/ directory - leaving a scaffold with an aspire.config.json pointing at nothing and
+         no .aspire/Directory.Packages.props, without which `aspire run` fails with NU1008. It would
+         also drop .gitignore and src/ui/react/.oxlintrc.json. Verify after packing by unzipping the
+         .nupkg and confirming those files are present. -->
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+
+    <!-- NU5128: no lib/ or ref/ folder. Expected - a template pack ships content, not assemblies. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <StagedTemplatesDir>$(MSBuildThisFileDirectory)..\artifacts\templates\</StagedTemplatesDir>
+    <StagingScript>$(MSBuildThisFileDirectory)..\templating\stage.ps1</StagingScript>
+  </PropertyGroup>
+
+  <!-- Staging rewrites paths and resolves the statically-false conditional regions, so it has to run
+       before the content glob is evaluated. A target-scoped ItemGroup is how the glob gets to see
+       files that did not exist when the project was evaluated.
+
+       Requires PowerShell 7 on PATH. The staging step is a maintainer action, not something a
+       scaffold consumer ever runs. -->
+  <Target Name="StageTemplateContent" BeforeTargets="_GetPackageFiles;Build">
+    <Exec Command="pwsh -NoProfile -File &quot;$(StagingScript)&quot;" />
+
+    <ItemGroup>
+      <!-- PackagePath with %(RecursiveDir) is required: these files live outside the project
+           directory, and without it pack flattens every one of them into content/. -->
+      <Content Include="$(StagedTemplatesDir)**\*"
+               Exclude="$(StagedTemplatesDir)**\bin\**;$(StagedTemplatesDir)**\obj\**">
+        <PackagePath>content\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+        <Pack>true</Pack>
+      </Content>
+    </ItemGroup>
+
+    <Error Condition="!Exists('$(StagedTemplatesDir)aspire-base\.template.config\template.json')"
+           Text="Staging produced no aspire-base template. Run 'pwsh templating/stage.ps1' and check its output." />
+  </Target>
+
+</Project>

@@ -1,0 +1,63 @@
+<Project>
+
+  <!-- Central package management for event-project/ only.
+
+       base-project/ has its own Directory.Packages.props and NuGet stops at the nearest file
+       walking up from a project, so the two do not merge and this one has to stand alone. A
+       workspace-root file was considered and rejected: base-project/ would shadow it anyway, so it
+       would serve this directory alone - indirection with no sharing. -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="Wolverine + Marten">
+    <!-- WolverineFx and WolverineFx.Marten ship together and must stay on the same version:
+         the .Marten package's Wolverine dependency is an exact-ish range and mixing them is how
+         you get a MissingMethodException at first message, not a restore error. -->
+    <PackageVersion Include="WolverineFx" Version="6.30.0" />
+    <PackageVersion Include="WolverineFx.Marten" Version="6.30.0" />
+    <!-- Not optional. As of Wolverine 6 the core package no longer ships the Roslyn runtime
+         compiler, and Wolverine's default TypeLoadMode.Dynamic compiles handler glue at startup -
+         without this the service throws InvalidOperationException before serving anything. The
+         alternative is pre-generating code (the `codegen write` command) and switching to
+         TypeLoadMode.Static, which buys faster cold starts at the cost of a build step that has to
+         be re-run whenever a handler changes. Wrong trade for a scaffold; see Program.cs. -->
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.30.0" />
+    <!-- Marten arrives transitively via WolverineFx.Marten; pinned explicitly anyway so the event
+         store's version is visible here rather than inferred from a dependency graph. -->
+    <PackageVersion Include="Marten" Version="9.29.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="ASP.NET Core">
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <!-- UI only, exactly as in base-project: renders the document AddOpenApi() generates. Note it
+         is SwaggerUI, not SwaggerGen - no second document generator, no dependencies. -->
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test stack - see the pin notes below before changing any of these">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="AutoFixture" Version="4.18.1" />
+    <PackageVersion Include="AutoFixture.Xunit2" Version="4.18.1" />
+  </ItemGroup>
+
+  <!-- Pin notes - carried over from base-project/Directory.Packages.props, because they are
+       properties of these package versions rather than of that directory. NSubstitute and
+       AutoFixture.AutoNSubstitute are deliberately absent here: the handlers in this project are
+       static functions of their arguments, so there is nothing to substitute. Add them back - on
+       5.3.0, per that file's note - if a scaffolded project grows something worth mocking.
+
+       * xUnit stays on v2, not v3. AutoFixture.Xunit2 4.18.1 is the stable AutoData
+         integration; AutoFixture.Xunit3 4.19.0 only declares support for
+         xunit.v3.extensibility.core 1.0.0.
+
+       * Shouldly's string ShouldContain defaults to Case.Insensitive, unlike NUnit's
+         Does.Contain. Pass Case.Sensitive explicitly or the assertion is weaker than
+         it reads. -->
+
+</Project>

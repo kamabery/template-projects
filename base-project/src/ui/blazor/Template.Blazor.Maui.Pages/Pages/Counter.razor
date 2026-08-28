@@ -1,0 +1,19 @@
+@page "/counter"
+@inherits ViewModelComponentBase<CounterViewModel>
+
+<PageTitle>Counter</PageTitle>
+
+<h1>Counter</h1>
+
+<FluentCard>
+    <p>
+        This page has no HTTP, no configuration and no services. If the count stops changing,
+        the ViewModel-to-component binding is broken and nothing else is implicated.
+    </p>
+
+    <p role="status">Current count: <strong data-testid="count">@ViewModel.Count</strong></p>
+
+    <FluentButton Appearance="Appearance.Accent" OnClick="@(() => ViewModel.IncrementCommand.Execute(null))">
+        Click me
+    </FluentButton>
+</FluentCard>

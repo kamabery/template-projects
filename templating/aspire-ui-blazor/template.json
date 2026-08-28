@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "template-projects",
+  "classifications": [
+    "Aspire",
+    "Blazor",
+    "MAUI",
+    "Web"
+  ],
+  "identity": "AspireStarter.Ui.Blazor",
+  "groupIdentity": "AspireStarter.Ui.Blazor",
+  "name": "Aspire starter add-on: Blazor front end",
+  "description": "Adds a Blazor UI written once in a Razor Class Library and rendered by the hosts you ask for: a WebAssembly web host, a MAUI Blazor Hybrid mobile/desktop host, or both. Emits .scaffold/aspire-ui-blazor.wiring.md, which lists the solution and AppHost edits the scaffolding skill applies.",
+  "shortName": "aspire-ui-blazor",
+  "sourceName": "Template",
+  "preferNameDirectory": false,
+  "defaultName": "AspireApp",
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "symbols": {
+    "web": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "true",
+      "displayName": "WebAssembly host",
+      "description": "Include the Blazor WebAssembly host. This is the only client that genuinely needs CORS on the API."
+    },
+    "maui": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "MAUI Blazor Hybrid host",
+      "description": "Include the MAUI Blazor Hybrid host for mobile and desktop. Requires the MAUI workload to build; the AppHost holds it back with WithExplicitStart so `aspire run` still works without it."
+    }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "condition": "(!web)",
+          "exclude": [
+            "src/ui/blazor/Template.Blazor.Maui.Web/**"
+          ]
+        },
+        {
+          "condition": "(!maui)",
+          "exclude": [
+            "src/ui/blazor/Template.Blazor.Maui/**"
+          ]
+        },
+        {
+          "comment": "The Pages RCL and its bUnit suite carry the whole UI; without a host to render them there is nothing to add.",
+          "condition": "(!web && !maui)",
+          "exclude": [
+            "src/**",
+            "tests/**"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- Central package management is deliberately OFF for this directory.
+
+       `aspire run` builds the file-based AppHost by generating a synthetic project next to it
+       (.aspire/apphost.cs.csproj). That project sits inside the repository, so any
+       Directory.Packages.props an ancestor directory grows would apply to it, and NuGet would then
+       reject the version on apphost.cs's `#:package Aspire.Hosting.JavaScript@13.5.1` directive
+       with NU1008 - under CPM a PackageReference may not carry its own Version.
+
+       Turning CPM off here rather than moving the pin into the root Directory.Packages.props keeps
+       the AppHost self-describing: its SDK and package versions stay in the `#:` directives at the
+       top of apphost.cs, which is what `aspire update` rewrites.
+
+       NuGet stops at the nearest Directory.Packages.props walking up from the project, so this file
+       shadows any ancestor one instead of merging with it. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

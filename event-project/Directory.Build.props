@@ -1,0 +1,17 @@
+<Project>
+
+  <!-- Mirrors base-project/Directory.Build.props. event-project/ sits beside base-project/ rather
+       than inside it, and MSBuild stops at the nearest Directory.Build.props walking up, so this
+       directory inherits nothing from there - the properties have to be repeated here. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Load-bearing: these projects are listed in template.slnx, which declares a
+         'Development' BuildType. Every project the solution builds must declare the same set or
+         `dotnet build -c Development` fails with MSB4126. -->
+    <Configurations>Debug;Release;Development</Configurations>
+  </PropertyGroup>
+
+</Project>

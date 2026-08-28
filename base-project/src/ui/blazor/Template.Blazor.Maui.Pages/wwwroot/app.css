@@ -1,0 +1,73 @@
+/* Shared app styling. Both hosts pull this in as
+   _content/Template.Blazor.Maui.Pages/app.css so the two look identical. */
+
+/* Make FluentLayout fill the viewport so the footer sits at the bottom and only the body
+   scrolls. FluentLayout emits .layout; both hosts set html/body to height:100% in their own
+   app.css. */
+.layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-stack {
+    flex: 1 1 auto;
+    align-items: stretch !important;
+    min-height: 0;
+}
+
+.nav-menu {
+    flex: 0 0 auto;
+}
+
+.body-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+}
+
+.content {
+    padding: 1rem 1.5rem;
+}
+
+h1 {
+    font-size: 1.75rem;
+    margin-block: 0 1rem;
+}
+
+/* Weather */
+
+.forecast-loading {
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    padding-block: 1rem;
+}
+
+.forecast-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-block-end: 1rem;
+}
+
+.forecast-table th,
+.forecast-table td {
+    text-align: start;
+    padding: .4rem .75rem;
+    border-block-end: 1px solid var(--neutral-stroke-divider-rest);
+}
+
+.forecast-table th {
+    font-weight: 600;
+}
+
+.forecast-table .numeric {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Unit toggle on the weather page - mirrors the React app's segmented buttons. */
+.unit-toggle {
+    display: flex;
+    gap: 0.25rem;
+    margin-block-end: 0.75rem;
+}
