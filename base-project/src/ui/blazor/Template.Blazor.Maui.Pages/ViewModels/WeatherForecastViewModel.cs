@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.Logging;
 using Template.Blazor.Maui.Pages.Models;
 using Template.Blazor.Maui.Pages.Mvvm;
 using Template.Blazor.Maui.Pages.Providers;
@@ -7,7 +8,9 @@ using Template.Blazor.Maui.Pages.Stores;
 
 namespace Template.Blazor.Maui.Pages.ViewModels;
 
-public partial class WeatherForecastViewModel(IWeatherForecastProvider forecastProvider) : ViewModelBase
+public partial class WeatherForecastViewModel(
+    IWeatherForecastProvider forecastProvider,
+    ILogger<WeatherForecastViewModel> logger) : ViewModelBase
 {
     // An immutable list swapped wholesale, NOT an ObservableCollection. Nothing here listens to
     // CollectionChanged; assigning a new list is what raises PropertyChanged and re-renders.
@@ -59,6 +62,11 @@ public partial class WeatherForecastViewModel(IWeatherForecastProvider forecastP
         }
         catch (Exception ex)
         {
+            // Logged as well as shown. AddSharedTelemetry exports ILogger records over OTLP, so an
+            // error the user sees as a banner is also an error a developer sees in the dashboard
+            // under this host's own resource - which is what /harness/fail-next is for.
+            logger.LogError(ex, "Loading the forecast failed.");
+
             ErrorMessage = $"Could not load the forecast: {ex.Message}";
         }
         finally

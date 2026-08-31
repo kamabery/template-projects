@@ -72,6 +72,13 @@ if (databaseProvider.Equals("sqlserver", StringComparison.OrdinalIgnoreCase))
 var api = builder.AddCSharpApp("api", "../base-project/src/template.api/template.api.csproj",
                                options => options.LaunchProfileName = "http")
     .WithEnvironment("Database__Provider", databaseProvider)
+    // HttpProtobuf rather than the default gRPC, for the browser's sake rather than the API's. The
+    // Blazor WebAssembly host cannot read this AppHost's environment and cannot commit the
+    // dashboard's per-run API key, so it asks the API for the OTLP settings instead
+    // (/client-telemetry/config, Development only). A browser cannot speak gRPC, so the endpoint the
+    // API hands out has to be one it can post to - and the simplest way to guarantee that is for the
+    // API to be using it itself.
+    .WithOtlpExporter(OtlpProtocol.HttpProtobuf)
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints()
     // Point the dashboard's link for this resource at the Swagger UI page rather than the API

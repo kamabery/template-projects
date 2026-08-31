@@ -4,12 +4,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { QueryClient } from '@tanstack/react-query'
 import type { Theme } from '@/store/preferences'
 import { setTheme, useTheme } from '@/store/preferences'
-
-const navLinkClass =
-  'rounded-lg px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:text-content'
-
-const navLinkActiveClass =
-  'rounded-lg px-3 py-1.5 text-sm font-medium text-content bg-surface'
+import { NavBar, NavItem } from '@/components/ui/nav'
+import { ToastProvider } from '@/components/ui/toast'
 
 const themes: Array<Theme> = ['system', 'light', 'dark']
 
@@ -41,7 +37,7 @@ function ThemeToggle() {
 
   return (
     <div
-      className="flex items-center gap-1 rounded-lg border border-border-subtle p-0.5"
+      className="flex items-center gap-1 rounded-control border border-border-subtle p-0.5"
       role="group"
       aria-label="Theme"
     >
@@ -53,8 +49,8 @@ function ThemeToggle() {
           aria-pressed={theme === option}
           className={
             theme === option
-              ? 'rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-contrast'
-              : 'rounded-md px-2 py-1 text-xs font-medium text-content-muted hover:text-content'
+              ? 'rounded-control bg-brand px-2 py-1 text-xs font-medium text-brand-contrast'
+              : 'rounded-control px-2 py-1 text-xs font-medium text-content-muted hover:text-content'
           }
         >
           {themeLabels[option]}
@@ -66,48 +62,38 @@ function ThemeToggle() {
 
 function RootLayout() {
   return (
-    <div className="min-h-dvh">
-      <header className="border-b border-border-subtle bg-surface-raised">
-        <nav className="mx-auto flex max-w-4xl items-center gap-1 px-6 py-3">
-          <span className="mr-4 font-semibold">template.ui</span>
-          <Link
-            to="/"
-            className={navLinkClass}
-            activeProps={{ className: navLinkActiveClass }}
-            activeOptions={{ exact: true }}
-          >
-            Home
-          </Link>
-          <Link
-            to="/counter"
-            className={navLinkClass}
-            activeProps={{ className: navLinkActiveClass }}
-          >
-            Counter
-          </Link>
-          <Link
-            to="/weather"
-            className={navLinkClass}
-            activeProps={{ className: navLinkActiveClass }}
-          >
-            Weather
-          </Link>
-          <div className="ml-auto">
-            <ThemeToggle />
+    <ToastProvider>
+      <div className="min-h-dvh">
+        <header className="border-b border-border-subtle bg-surface-raised">
+          <div className="mx-auto flex max-w-4xl items-center gap-1 px-6 py-3">
+            <span className="mr-4 font-semibold">template.ui</span>
+
+            <NavBar>
+              <NavItem to="/" exact>
+                Home
+              </NavItem>
+              <NavItem to="/counter">Counter</NavItem>
+              <NavItem to="/weather">Weather</NavItem>
+              <NavItem to="/styleguide">Style guide</NavItem>
+            </NavBar>
+
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
-        </nav>
-      </header>
+        </header>
 
-      <main className="mx-auto max-w-4xl px-6 py-10">
-        <Outlet />
-      </main>
+        <main className="mx-auto max-w-4xl px-6 py-10">
+          <Outlet />
+        </main>
 
-      {import.meta.env.DEV && (
-        <>
-          <TanStackRouterDevtools position="bottom-left" />
-          <ReactQueryDevtools initialIsOpen={false} />
-        </>
-      )}
-    </div>
+        {import.meta.env.DEV && (
+          <>
+            <TanStackRouterDevtools position="bottom-left" />
+            <ReactQueryDevtools initialIsOpen={false} />
+          </>
+        )}
+      </div>
+    </ToastProvider>
   )
 }

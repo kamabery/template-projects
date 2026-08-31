@@ -1,5 +1,6 @@
 using AutoFixture;
 using AutoFixture.AutoNSubstitute;
+using Template.Blazor.Maui.Pages.ViewModels;
 
 namespace Template.Blazor.Maui.Tests.Infrastructure;
 
@@ -40,6 +41,13 @@ public static class TestFixtureFactory
         // version cannot simply move forward.
         fixture.Register(() => DateOnly.FromDateTime(fixture.Create<DateTime>()));
         fixture.Register(() => TimeOnly.FromDateTime(fixture.Create<DateTime>()));
+
+        // AutoFixture fills public writable properties, and WeatherForecastViewModel.Unit is a
+        // proxy that writes through to the static PreferencesStore. Left alone, merely asking for a
+        // ViewModel randomises a process-wide preference, and whichever test happened to run last
+        // decided what PreferencesStoreTests.Unit_DefaultsToCelsius would see. A test that only
+        // constructs a ViewModel must not have side effects outside itself.
+        fixture.Customize<WeatherForecastViewModel>(composer => composer.OmitAutoProperties());
 
         return fixture;
     }

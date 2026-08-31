@@ -1,0 +1,15 @@
+@* One design token, shown as the color it resolves to.
+
+   No value text beside it, unlike the React guide: reading a resolved custom property needs
+   getComputedStyle, and this library stays JS-free so it renders in both hosts and under bUnit.
+   The chip is drawn with the token itself, so it is still the live value. *@
+
+<div class="sg-swatch">
+    <div class="sg-chip" style="background: var(--color-@Token);"></div>
+    <code>--color-@Token</code>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Token { get; set; } = string.Empty;
+}

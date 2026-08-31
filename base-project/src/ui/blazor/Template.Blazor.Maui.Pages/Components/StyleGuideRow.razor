@@ -1,0 +1,14 @@
+@* One row of the matrix: a variant or a state, labelled with which it is. *@
+
+<div class="sg-row">
+    <span class="sg-row-label">@Label</span>
+    <div class="sg-row-body">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

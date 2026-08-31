@@ -115,7 +115,7 @@ dotnet build src/ui/blazor/Template.Blazor.Maui -f net10.0-windows10.0.19041.0 -
 
 ## The pages
 
-All three front ends serve the same three routes:
+All three front ends serve the same four routes:
 
 - **`/`** — a landing page. In React it also probes the API and reports online/offline.
 - **`/counter`** has no HTTP, no configuration and no services. It exists so that when something
@@ -123,9 +123,23 @@ All three front ends serve the same three routes:
 - **`/weather`** exercises the full path to the API, with loading and error states as first-class
   UI and a °C/°F toggle. React reads it through a TanStack DB collection; Blazor reads it through a
   ViewModel and a Refit provider.
+- **`/styleguide`** is the living style guide: every approved component, with its variants, its
+  states, an accessibility note and the code to copy. React renders its own components from
+  `src/ui/react/src/components/ui/`; Blazor renders the FluentUI components those map onto. The two
+  guides list the same sections in the same order, so they can be read side by side - which is the
+  reason this repository carries two front ends at all. Both ship in every configuration; neither is
+  gated on Development.
 
 React additionally has an Auto/Light/Dark control in the header; Blazor has the equivalent switch
 in its `FluentHeader`.
+
+Both front ends resolve their appearance from one shared token vocabulary - `--color-surface`,
+`--color-intent-danger`, `--radius-control`, `--shadow-raised`, `--motion-fast` and the rest. React
+defines them in `src/ui/react/src/index.css` under Tailwind's `@theme`, carrying both palettes in one
+definition through `light-dark()`. Blazor defines the same names in
+`src/ui/blazor/Template.Blazor.Maui.Pages/wwwroot/app.css` as aliases onto FluentUI's own variables,
+which is what makes them follow `FluentDesignTheme` without a second dark palette. The two files are
+kept in step by hand: **adding a token to one means adding it to the other.**
 
 ## Progressive web apps
 
@@ -333,6 +347,52 @@ carried over verbatim from the stock WebAPI sample — note that dividing by `0.
 multiplying by 9/5 truncates, so 25 °C renders as 76 °F, not 77. The server's `TemperatureF` has no
 setter, so it is serialized out and ignored on the way back in; if you fix the arithmetic, fix it
 on both sides.
+
+## Logging and client telemetry
+
+### Serilog
+
+Every service logs through Serilog, wired once in `src/template.servicedefaults/SerilogExtensions.cs`
+and picked up by the single `builder.AddServiceDefaults()` call each of them already makes. It writes
+to the console, and — whenever the AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT` — to the Aspire
+dashboard over OTLP. Run a service on its own and the OTLP sink is simply not added.
+
+Levels live under `Serilog:MinimumLevel` in each service's `appsettings.json`. **Serilog does not
+read `Logging:LogLevel`**, so those sections were replaced rather than left in place to mislead;
+the AppHost keeps its own, because it is not a service and does not get Serilog.
+
+Serilog replaces `ILoggerFactory` outright and does not write to `ILoggerProvider`s, which is what
+keeps the OpenTelemetry logging provider from exporting every record a second time. `ConfigureSerilog`
+also clears the providers so that removal is visible rather than implied — which is why it runs
+after `ConfigureOpenTelemetry` and not before.
+
+There is no `UseSerilogRequestLogging`: the OpenTelemetry ASP.NET Core instrumentation already
+records every request as a span, and the dashboard's trace view is a better place to read them.
+
+### RUM from the Blazor hosts
+
+Both Blazor hosts report to the dashboard as their own resource, the counterpart of the browser RUM
+`src/ui/react/src/lib/telemetry.ts` sets up for React. The implementation is shared, in
+`src/ui/blazor/Template.Blazor.Maui.Pages/Telemetry/`, and each host calls `AddSharedTelemetry` and
+then `ActivateSharedTelemetry` — the same "register it once for both hosts" rule the ViewModels and
+Refit clients follow.
+
+You get a `page_view` span per navigation, a client span per HTTP call with `traceparent` attached —
+so a click in the UI continues into the API's own spans — and every `ILogger` record. Arm
+`/harness/fail-next` and reload `/weather`: the failure appears in the dashboard under the client,
+not just as a banner in the page.
+
+**The MAUI host also reports metrics; the WebAssembly host does not.** A `MeterProvider` collects on
+a background thread, and the browser runtime creates that thread without complaint and then never
+runs it, so it is not registered there at all rather than left in place doing nothing. Traces work in
+the browser because they are switched to export one span at a time.
+
+The two hosts find the dashboard differently, because their runtimes differ. MAUI is a process the
+AppHost starts, so the `OTEL_*` variables are simply in its environment. A browser has no
+environment to read, and `wwwroot/appsettings.json` is a static file that cannot carry an API key
+regenerated on every run — so the WebAssembly host asks the API, at `GET /client-telemetry/config`
+(Development only). Run either host outside `aspire run` and there is nothing to report to, so
+telemetry switches itself off, exactly as the React app does.
 
 ## The MVVM framework
 

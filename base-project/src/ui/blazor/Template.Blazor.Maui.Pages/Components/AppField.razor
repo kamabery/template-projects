@@ -1,0 +1,85 @@
+@* Form Validation Message contract, and the counterpart of the React app's Field in
+   src/ui/react/src/components/ui/field.tsx.
+
+   FluentUI's own label, description and validation wiring differs between FluentTextField,
+   FluentSelect and FluentCheckbox, so a form built straight on them ends up hand-wiring `for` and
+   `aria-describedby` once per control and getting it wrong somewhere. This is the one wrapper in
+   this library that earns its place: it generates the ids and hands them to whatever control it
+   wraps, so every field in every scaffold is described the same way.
+
+   A field is invalid when Error is non-empty. There is no separate flag to fall out of step with
+   the message - which is a small, deliberate difference from the React side, where the two are
+   separate components and so need one. *@
+
+<div class="app-field">
+    <label class="app-field-label" for="@_controlId">
+        @Label
+        @if (Required)
+        {
+            <span class="app-field-required" aria-hidden="true">*</span>
+        }
+    </label>
+
+    @ChildContent(new AppFieldContext(_controlId, DescribedBy, Invalid))
+
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="app-field-description" id="@_descriptionId">@Description</p>
+    }
+
+    @if (Invalid)
+    {
+        @* role="alert" so the message is announced when it appears, not only when focus lands. *@
+        <p class="app-field-error" id="@_errorId" role="alert">@Error</p>
+    }
+</div>
+
+@code {
+    private readonly string _id = $"field-{Guid.NewGuid():N}";
+
+    private string _controlId => $"{_id}-control";
+    private string _descriptionId => $"{_id}-description";
+    private string _errorId => $"{_id}-error";
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>Marks the label and nothing else. The control still validates on its own terms.</summary>
+    [Parameter]
+    public bool Required { get; set; }
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>The validation message. Non-empty means the field is invalid.</summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    [Parameter, EditorRequired]
+    public RenderFragment<AppFieldContext> ChildContent { get; set; } = default!;
+
+    private bool Invalid => !string.IsNullOrWhiteSpace(Error);
+
+    /// <summary>
+    /// Only ids that are actually rendered, so the attribute never points at a missing element.
+    /// </summary>
+    private string DescribedBy
+    {
+        get
+        {
+            var ids = new List<string>(2);
+
+            if (!string.IsNullOrWhiteSpace(Description))
+            {
+                ids.Add(_descriptionId);
+            }
+
+            if (Invalid)
+            {
+                ids.Add(_errorId);
+            }
+
+            return string.Join(' ', ids);
+        }
+    }
+}

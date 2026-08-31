@@ -1,0 +1,617 @@
+@page "/styleguide"
+@inject IDialogService DialogService
+@inject IToastService ToastService
+
+@* Living style guide. Every approved component, every variant, every state.
+
+   The React front end publishes the same sections in the same order at its own /styleguide
+   (src/ui/react/src/routes/styleguide.tsx). Keep the two lists aligned: reading them side by side
+   is the point of this repository carrying two front ends.
+
+   It ships in every configuration rather than being gated on Development. A @page cannot be gated
+   as cheaply as a React route, and gating only the React one would make the two drift.
+
+   Where a section names a FluentUI component, that component IS the approved implementation of the
+   contract - this library wraps almost nothing, because FluentUI already is the component library
+   on this side. AppField is the one exception, and the Form validation message section says why. *@
+
+<PageTitle>Style guide</PageTitle>
+
+<div class="sg-page">
+    <header>
+        <h1>Style guide</h1>
+        <p>
+            The approved components, the tokens they are built from, and the behaviour each one is
+            contracted to have. Prefer these over new markup: a variant that is missing belongs here
+            first, not in one screen.
+        </p>
+    </header>
+
+    <section>
+        <h2 class="sg-group-title">Foundations</h2>
+
+        <StyleGuideSection Title="Color tokens"
+                           Intent="Every color in the product comes from one of these. They are aliases onto FluentUI's own variables, so they follow the theme switch without a second dark palette to keep in sync."
+                           Accessibility="Color never carries meaning alone: each intent is paired with a word or a glyph wherever it is used."
+                           Code="@Snippet01">
+            <StyleGuideRow Label="Surface + content">
+                <div class="sg-swatch-grid">
+                    @foreach (var token in SurfaceTokens)
+                    {
+                        <Swatch Token="@token" />
+                    }
+                </div>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Brand + focus">
+                <div class="sg-swatch-grid">
+                    @foreach (var token in BrandTokens)
+                    {
+                        <Swatch Token="@token" />
+                    }
+                </div>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Intents">
+                <div class="sg-swatch-grid">
+                    @foreach (var token in IntentTokens)
+                    {
+                        <Swatch Token="@token" />
+                    }
+                </div>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Shape, elevation and motion"
+                           Intent="Corner radius, shadow and duration are tokens for the same reason colors are: a literal value drifts the moment one component is restyled."
+                           Accessibility="Motion tokens collapse to 1ms under prefers-reduced-motion, so no component has to opt in individually."
+                           Code="@Snippet02">
+            <StyleGuideRow Label="Radius">
+                <div class="sg-shape" style="border-radius: var(--radius-control);">control</div>
+                <div class="sg-shape" style="border-radius: var(--radius-surface);">surface</div>
+                <div class="sg-shape" style="border-radius: var(--radius-pill);">pill</div>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Elevation">
+                <div class="sg-elevation" style="box-shadow: var(--shadow-raised);">shadow-raised</div>
+                <div class="sg-elevation" style="box-shadow: var(--shadow-overlay);">shadow-overlay</div>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Motion">
+                <span class="sg-elevation" style="transition: background var(--motion-fast);">motion-fast</span>
+                <span class="sg-elevation" style="transition: background var(--motion-slow);">motion-slow</span>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+
+    <section>
+        <h2 class="sg-group-title">Controls</h2>
+
+        <StyleGuideSection Title="Button"
+                           Intent="Invokes an action on the current screen. Use a link, not a button, for anything that navigates. FluentButton, with Appearance carrying the variant."
+                           Accessibility="FluentButton renders a real button, so Enter and Space work and the focus indicator is the platform's."
+                           Code="@Snippet03">
+            <StyleGuideRow Label="Variants">
+                <FluentButton Appearance="Appearance.Accent">Primary</FluentButton>
+                <FluentButton Appearance="Appearance.Neutral">Secondary</FluentButton>
+                <FluentButton Appearance="Appearance.Stealth">Ghost</FluentButton>
+                <FluentButton Appearance="Appearance.Neutral" Class="app-button-danger">Danger</FluentButton>
+            </StyleGuideRow>
+            <StyleGuideRow Label="States">
+                <FluentButton Appearance="Appearance.Accent" Disabled="true">Disabled</FluentButton>
+                <FluentButton Appearance="Appearance.Accent" Loading="true">Saving</FluentButton>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Text input"
+                           Intent="A single line of free text. Wrap it in an AppField to get the label, description and validation wiring."
+                           Accessibility="AppField supplies the id the label points at and the aria-describedby that names the description and the error. A placeholder is never the label."
+                           Code="@Snippet04">
+            <StyleGuideRow Label="Default">
+                <AppField Label="Customer name" Context="field">
+                    <FluentTextField Id="@field.ControlId" @bind-Value="CustomerName" Placeholder="Ada Lovelace" />
+                </AppField>
+            </StyleGuideRow>
+            <StyleGuideRow Label="With description">
+                <AppField Label="Email" Required="true" Description="Used for order confirmations." Context="field">
+                    <FluentTextField Id="@field.ControlId" aria-describedby="@field.DescribedBy" @bind-Value="Email" />
+                </AppField>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Invalid">
+                <AppField Label="Email" Error="Enter an email address." Context="field">
+                    <FluentTextField Id="@field.ControlId" aria-describedby="@field.DescribedBy" aria-invalid="true" Value="not-an-email" />
+                </AppField>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Disabled">
+                <AppField Label="Account id" Context="field">
+                    <FluentTextField Id="@field.ControlId" Value="ACC-4021" Disabled="true" />
+                </AppField>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Textarea"
+                           Intent="Several lines of free text. Anything longer than a sentence or two."
+                           Accessibility="Same AppField wiring as the text input; the label is a real label, not a heading above it."
+                           Code="@Snippet05">
+            <StyleGuideRow Label="Default">
+                <AppField Label="Notes" Context="field">
+                    <FluentTextArea Id="@field.ControlId" @bind-Value="Notes" Rows="3" Placeholder="What happened?" />
+                </AppField>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Invalid">
+                <AppField Label="Notes" Error="Give at least 20 characters." Context="field">
+                    <FluentTextArea Id="@field.ControlId" aria-describedby="@field.DescribedBy" Value="x" Rows="3" />
+                </AppField>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Select"
+                           Intent="One value from a short, known list. Above roughly a dozen options, use FluentAutocomplete instead."
+                           Accessibility="FluentSelect manages its own listbox roles and keyboard behaviour; the accessible name comes from the AppField label."
+                           Code="@Snippet06">
+            <StyleGuideRow Label="Default">
+                <AppField Label="Region" Context="field">
+                    <FluentSelect TOption="string" Id="@field.ControlId" @bind-Value="Region">
+                        @foreach (var region in Regions)
+                        {
+                            <FluentOption Value="@region">@region</FluentOption>
+                        }
+                    </FluentSelect>
+                </AppField>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Invalid">
+                <AppField Label="Region" Required="true" Error="Choose a region." Context="field">
+                    <FluentSelect TOption="string" Id="@field.ControlId" aria-describedby="@field.DescribedBy">
+                        <FluentOption Value="">Choose a region</FluentOption>
+                        @foreach (var region in Regions)
+                        {
+                            <FluentOption Value="@region">@region</FluentOption>
+                        }
+                    </FluentSelect>
+                </AppField>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Checkbox"
+                           Intent="An independent on/off choice, or several of them. For one setting that takes effect immediately, use a Switch."
+                           Accessibility="FluentCheckbox's Label parameter is the accessible name - do not put the text in a separate element beside it."
+                           Code="@Snippet07">
+            <StyleGuideRow Label="Default">
+                <FluentCheckbox @bind-Value="EmailMe" Label="Email me about order changes" />
+            </StyleGuideRow>
+            <StyleGuideRow Label="Checked">
+                <FluentCheckbox @bind-Value="IncludeArchived" Label="Include archived customers" />
+            </StyleGuideRow>
+            <StyleGuideRow Label="Disabled">
+                <FluentCheckbox Value="true" Disabled="true" Label="Managed by your administrator" />
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Switch"
+                           Intent="A setting that takes effect the moment it is flipped. If the change only applies on save, use a Checkbox."
+                           Accessibility="FluentSwitch reports an on/off state rather than checked/unchecked, which is what tells the user the change is already live."
+                           Code="@Snippet08">
+            <StyleGuideRow Label="Default">
+                <FluentSwitch @bind-Value="ShowRetired" Label="Show retired products" />
+            </StyleGuideRow>
+            <StyleGuideRow Label="Checked">
+                <FluentSwitch @bind-Value="Notifications" Label="Email notifications" />
+            </StyleGuideRow>
+            <StyleGuideRow Label="Disabled">
+                <FluentSwitch Value="true" Disabled="true" Label="Enforced by policy" />
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Radio group"
+                           Intent="Exactly one value from two to five visible options. More than that belongs in a Select."
+                           Accessibility="The group's Label names the whole set, so a screen reader announces which question each option answers."
+                           Code="@Snippet09">
+            <StyleGuideRow Label="Default">
+                <FluentRadioGroup Name="shipping" @bind-Value="Shipping" Label="Shipping">
+                    <FluentRadio Value="@("standard")">Standard - 3 to 5 days</FluentRadio>
+                    <FluentRadio Value="@("express")">Express - next day</FluentRadio>
+                    <FluentRadio Value="@("pickup")" Disabled="true">Collect in store</FluentRadio>
+                </FluentRadioGroup>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Selected">
+                <span data-testid="shipping">@Shipping</span>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+
+    <section>
+        <h2 class="sg-group-title">Feedback</h2>
+
+        <StyleGuideSection Title="Alert"
+                           Intent="A message about the screen the user is on. For something transient and non-blocking, use a Toast. FluentMessageBar, with MessageIntent carrying the intent."
+                           Accessibility="FluentMessageBar does not forward arbitrary attributes to the DOM, so role and data-testid have to live on an element this library owns - see Pages/WeatherForecasts.razor for the same wrapper."
+                           Code="@Snippet10">
+            <StyleGuideRow Label="Intents">
+                <div style="display:flex; flex-direction:column; gap:.75rem; width:100%;">
+                    <FluentMessageBar Intent="MessageIntent.Info" AllowDismiss="false" Title="Scheduled maintenance">
+                        The API is read-only on Sunday between 02:00 and 04:00 UTC.
+                    </FluentMessageBar>
+                    <FluentMessageBar Intent="MessageIntent.Success" AllowDismiss="false" Title="Customer saved">
+                        Changes are live.
+                    </FluentMessageBar>
+                    <FluentMessageBar Intent="MessageIntent.Warning" AllowDismiss="false" Title="Approaching your quota">
+                        You have used 92% of this month's requests.
+                    </FluentMessageBar>
+                    <div role="alert" data-testid="alert-error">
+                        <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Title="Could not save">
+                            The API returned 500. Nothing was changed.
+                        </FluentMessageBar>
+                    </div>
+                </div>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Badge"
+                           Intent="A short status word attached to something else. Not a button, and never the only thing that carries the status."
+                           Accessibility="The status word is inside the badge, so the meaning survives without color."
+                           Code="@Snippet11">
+            <StyleGuideRow Label="Appearances">
+                <FluentBadge>Draft</FluentBadge>
+                <FluentBadge Appearance="Appearance.Accent">In review</FluentBadge>
+                <FluentBadge Appearance="Appearance.Neutral">Active</FluentBadge>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Intents">
+                <FluentBadge BackgroundColor="var(--color-intent-success-subtle)" Color="var(--color-intent-success)">Active</FluentBadge>
+                <FluentBadge BackgroundColor="var(--color-intent-warning-subtle)" Color="var(--color-content)">Past due</FluentBadge>
+                <FluentBadge BackgroundColor="var(--color-intent-danger-subtle)" Color="var(--color-intent-danger)">Suspended</FluentBadge>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Loading indicator"
+                           Intent="Work is in progress and the user must wait. If the shape of what is coming is known, a Skeleton says more."
+                           Accessibility="The ring alone says nothing, so pair it with visible text - the weather page does exactly this."
+                           Code="@Snippet12">
+            <StyleGuideRow Label="Ring">
+                <FluentProgressRing />
+            </StyleGuideRow>
+            <StyleGuideRow Label="With label">
+                <div class="forecast-loading">
+                    <FluentProgressRing />
+                    <span>Loading the forecast...</span>
+                </div>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Skeleton"
+                           Intent="A placeholder in the shape of the content that is coming. Use it where the layout is known, so nothing jumps when the data lands."
+                           Accessibility="Decoration only. The surrounding region is what announces that loading is happening."
+                           Code="@Snippet13">
+            <StyleGuideRow Label="Card">
+                <div style="display:flex; flex-direction:column; gap:.5rem; width:16rem;">
+                    <FluentSkeleton Width="6rem" Height="0.75rem" Shape="SkeletonShape.Rect" />
+                    <FluentSkeleton Width="4rem" Height="1.75rem" Shape="SkeletonShape.Rect" />
+                    <FluentSkeleton Width="8rem" Height="0.75rem" Shape="SkeletonShape.Rect" />
+                </div>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Toast"
+                           Intent="Confirmation of something that already happened, which the user does not have to act on. Anything they must read belongs in an Alert."
+                           Accessibility="Toasts dismiss themselves, so nothing that matters may be delivered only this way."
+                           Code="@Snippet14">
+            <StyleGuideRow Label="Intents">
+                <FluentButton OnClick="@(() => ToastService.ShowInfo("Nothing to report."))">Info</FluentButton>
+                <FluentButton OnClick="@(() => ToastService.ShowSuccess("Customer saved."))">Success</FluentButton>
+                <FluentButton OnClick="@(() => ToastService.ShowWarning("Quota is nearly spent."))">Warning</FluentButton>
+                <FluentButton OnClick="@(() => ToastService.ShowError("The request failed."))">Danger</FluentButton>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+
+    <section>
+        <h2 class="sg-group-title">Navigation and structure</h2>
+
+        <StyleGuideSection Title="Tabs"
+                           Intent="Alternative views of one subject, where only one is needed at a time. Not a substitute for navigation between pages."
+                           Accessibility="FluentTabs implements the WAI-ARIA tabs pattern, including arrow-key movement and the single tab stop."
+                           Code="@Snippet15">
+            <StyleGuideRow Label="Default">
+                <div style="width:100%;">
+                    <FluentTabs>
+                        <FluentTab Label="Details" Id="tab-details">
+                            <p>Name, contact details and billing address.</p>
+                        </FluentTab>
+                        <FluentTab Label="Orders" Id="tab-orders">
+                            <p>Twelve orders, four open.</p>
+                        </FluentTab>
+                        <FluentTab Label="Activity" Id="tab-activity">
+                            <p>Last seen three days ago.</p>
+                        </FluentTab>
+                    </FluentTabs>
+                </div>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Breadcrumb"
+                           Intent="Where this screen sits in a hierarchy, and a way back up it. Not a history trail."
+                           Accessibility="The last crumb is text rather than a link to where you already are."
+                           Code="@Snippet16">
+            <StyleGuideRow Label="Default">
+                <FluentBreadcrumb>
+                    <FluentBreadcrumbItem Href="/">Home</FluentBreadcrumbItem>
+                    <FluentBreadcrumbItem Href="/weather">Weather</FluentBreadcrumbItem>
+                    <FluentBreadcrumbItem>Style guide</FluentBreadcrumbItem>
+                </FluentBreadcrumb>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Navigation"
+                           Intent="Movement between the screens of the application. The shell's NavMenu uses exactly this - a plain NavLink, not FluentNavMenu."
+                           Accessibility="NavLink marks the active route with an active class, and the nav element is the landmark. FluentNavMenu is avoided because it ships a JS module that bUnit cannot resolve."
+                           Code="@Snippet17">
+            <StyleGuideRow Label="Default">
+                <nav class="nav-menu" aria-label="Style guide example">
+                    <FluentStack Orientation="Orientation.Vertical" VerticalGap="4">
+                        <NavLink class="nav-item" href="" Match="NavLinkMatch.All">Home</NavLink>
+                        <NavLink class="nav-item" href="counter">Counter</NavLink>
+                        <NavLink class="nav-item" href="weather">Weather</NavLink>
+                    </FluentStack>
+                </nav>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Table"
+                           Intent="Rows that are compared against each other along shared columns. A plain table, not FluentDataGrid: the grid ships a JS module that bUnit cannot resolve, so nothing built on it is testable here."
+                           Accessibility="Header cells carry scope=col. Numeric columns get tabular figures so digits line up."
+                           Code="@Snippet18">
+            <StyleGuideRow Label="Default">
+                <table class="forecast-table" data-testid="styleguide-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Region</th>
+                            <th scope="col" class="numeric">Orders</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in TableRows)
+                        {
+                            <tr>
+                                <td>@row.Region</td>
+                                <td class="numeric">@row.Orders</td>
+                                <td><FluentBadge>@row.Status</FluentBadge></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+
+    <section>
+        <h2 class="sg-group-title">Overlays</h2>
+
+        <StyleGuideSection Title="Dialog"
+                           Intent="A task that must be finished or abandoned before the screen behind it is usable again. Anything the user can ignore is not a dialog."
+                           Accessibility="FluentDialog traps focus and closes on Escape. It is launched through IDialogService, which needs the FluentDialogProvider in MainLayout."
+                           Code="@Snippet19">
+            <StyleGuideRow Label="Default">
+                <FluentButton Appearance="Appearance.Neutral" OnClick="ShowInfoDialogAsync" data-testid="open-dialog">
+                    Open dialog
+                </FluentButton>
+                <span data-testid="dialog-result">@DialogResult</span>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+
+    <section>
+        <h2 class="sg-group-title">Patterns</h2>
+
+        <StyleGuideSection Title="Form validation message"
+                           Intent="How a control says what is wrong with it. Never a message that floats free of the control it describes. This is what AppField exists for."
+                           Accessibility="AppField generates the ids, points the label at the control, names the description and error in aria-describedby, and gives the message role=alert so it is announced when it appears."
+                           Code="@Snippet20">
+            <StyleGuideRow Label="Live">
+                <AppField Label="Email"
+                          Required="true"
+                          Description="@LiveEmailDescription"
+                          Error="@LiveEmailError"
+                          Context="field">
+                    <FluentTextField Id="@field.ControlId"
+                                     aria-describedby="@field.DescribedBy"
+                                     @bind-Value="LiveEmail"
+                                     @bind-Value:event="oninput"
+                                     data-testid="live-email" />
+                </AppField>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Customer search form"
+                           Intent="The whole form contract in one place: labels, descriptions, required marks, validation on submit, and a single primary action."
+                           Accessibility="Validation runs on submit, not on every keystroke, so a message never appears while the user is still typing the value that would clear it."
+                           Code="@Snippet21">
+            <EditForm class="sg-form" Model="this" OnSubmit="Search" data-testid="search-form">
+                <AppField Label="Customer name"
+                          Required="true"
+                          Description="Partial names match."
+                          Error="@SearchNameError"
+                          Context="field">
+                    <FluentTextField Id="@field.ControlId"
+                                     aria-describedby="@field.DescribedBy"
+                                     @bind-Value="SearchName"
+                                     Placeholder="Ada Lovelace" />
+                </AppField>
+
+                <AppField Label="Region" Required="true" Error="@SearchRegionError" Context="field">
+                    <FluentSelect TOption="string" Id="@field.ControlId" aria-describedby="@field.DescribedBy" @bind-Value="SearchRegion">
+                        <FluentOption Value="">Choose a region</FluentOption>
+                        @foreach (var region in Regions)
+                        {
+                            <FluentOption Value="@region">@region</FluentOption>
+                        }
+                    </FluentSelect>
+                </AppField>
+
+                <FluentCheckbox @bind-Value="SearchArchived" Label="Include archived customers" />
+
+                <div style="display:flex; gap:.5rem;">
+                    <FluentButton Type="ButtonType.Submit" Appearance="Appearance.Accent" data-testid="search-submit">
+                        Search
+                    </FluentButton>
+                    <FluentButton Type="ButtonType.Button" Appearance="Appearance.Stealth" OnClick="ClearSearch">
+                        Clear
+                    </FluentButton>
+                </div>
+            </EditForm>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Destructive confirmation"
+                           Intent="An action that cannot be undone, gated behind an explicit confirmation that names what will be lost."
+                           Accessibility="The confirmation states what is removed and what survives, so the decision does not depend on remembering what the button said."
+                           Code="@Snippet22">
+            <StyleGuideRow Label="Default">
+                @if (CustomerDeleted)
+                {
+                    <FluentMessageBar Intent="MessageIntent.Success" AllowDismiss="false" Title="Customer deleted">
+                        <FluentButton Appearance="Appearance.Neutral" OnClick="@(() => CustomerDeleted = false)">
+                            Reset the demo
+                        </FluentButton>
+                    </FluentMessageBar>
+                }
+                else
+                {
+                    <FluentButton Appearance="Appearance.Neutral"
+                                  Class="app-button-danger"
+                                  OnClick="ConfirmDeleteAsync"
+                                  data-testid="delete-customer">
+                        Delete customer
+                    </FluentButton>
+                }
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
+</div>
+
+@code {
+    // Snippets shown under each section. C# constants rather than attribute literals: a
+    // component attribute cannot carry markup or a literal @, and every snippet here has both.
+    private const string Snippet01 = "background: var(--color-surface-raised);";
+    private const string Snippet02 = "border-radius: var(--radius-surface); box-shadow: var(--shadow-raised);";
+    private const string Snippet03 = "<FluentButton Appearance=\"Appearance.Accent\">Save</FluentButton>";
+    private const string Snippet04 = "<AppField Label=\"Email\" Required=\"true\" Error=\"@error\">\n    <FluentTextField Id=\"@context.ControlId\" @bind-Value=\"Email\" />\n</AppField>";
+    private const string Snippet05 = "<FluentTextArea Id=\"@context.ControlId\" Rows=\"4\" />";
+    private const string Snippet06 = "<FluentSelect TOption=\"string\" @bind-Value=\"Region\">\n    <FluentOption Value=\"Europe\">Europe</FluentOption>\n</FluentSelect>";
+    private const string Snippet07 = "<FluentCheckbox @bind-Value=\"Subscribed\" Label=\"Email me\" />";
+    private const string Snippet08 = "<FluentSwitch @bind-Value=\"DarkMode\" Label=\"Dark mode\" />";
+    private const string Snippet09 = "<FluentRadioGroup @bind-Value=\"Shipping\" Label=\"Shipping\">\n    <FluentRadio Value=\"@(\"standard\")\">Standard</FluentRadio>\n</FluentRadioGroup>";
+    private const string Snippet10 = "<FluentMessageBar Intent=\"MessageIntent.Error\" AllowDismiss=\"false\">...</FluentMessageBar>";
+    private const string Snippet11 = "<FluentBadge Appearance=\"Appearance.Accent\">Active</FluentBadge>";
+    private const string Snippet12 = "<FluentProgressRing />";
+    private const string Snippet13 = "<FluentSkeleton Width=\"10rem\" Height=\"1rem\" />";
+    private const string Snippet14 = "ToastService.ShowSuccess(\"Customer saved.\");";
+    private const string Snippet15 = "<FluentTabs><FluentTab Label=\"Details\">...</FluentTab></FluentTabs>";
+    private const string Snippet16 = "<FluentBreadcrumb><FluentBreadcrumbItem Href=\"/\">Home</FluentBreadcrumbItem></FluentBreadcrumb>";
+    private const string Snippet17 = "<NavLink class=\"nav-item\" href=\"weather\">Weather</NavLink>";
+    private const string Snippet18 = "<table class=\"forecast-table\">...</table>";
+    private const string Snippet19 = "await DialogService.ShowConfirmationAsync(\"Message\", \"Yes\", \"No\", \"Title\");";
+    private const string Snippet20 = "<AppField Label=\"Email\" Required=\"true\" Error=\"@EmailError\">\n    <FluentTextField Id=\"@context.ControlId\" aria-describedby=\"@context.DescribedBy\" @bind-Value=\"LiveEmail\" />\n</AppField>";
+    private const string Snippet21 = "<EditForm Model=\"this\" OnSubmit=\"Search\">...</EditForm>";
+    private const string Snippet22 = "var result = await DialogService.ShowConfirmationAsync(message, \"Delete\", \"Cancel\", title);\nif (!(await result.Result).Cancelled) { ... }";
+
+    private const string LiveEmailDescription = "Type something without an @ to see the message.";
+    private static readonly string[] SurfaceTokens =
+    [
+        "surface", "surface-raised", "surface-sunken", "border-subtle",
+        "border-strong", "content", "content-muted", "content-disabled"
+    ];
+
+    private static readonly string[] BrandTokens =
+        ["brand", "brand-subtle", "brand-contrast", "focus-ring"];
+
+    private static readonly string[] IntentTokens =
+    [
+        "intent-info", "intent-info-subtle", "intent-success", "intent-success-subtle",
+        "intent-warning", "intent-warning-subtle", "intent-danger", "intent-danger-subtle"
+    ];
+
+    private static readonly string[] Regions = ["Europe", "North America", "Asia Pacific"];
+
+    private static readonly (string Region, int Orders, string Status)[] TableRows =
+    [
+        ("Europe", 128, "Active"),
+        ("North America", 94, "Active"),
+        ("Asia Pacific", 12, "Suspended")
+    ];
+
+    // Demo state. A page, not a ViewModel: none of this outlives the guide, and routing it through
+    // MVVM would only make the two style guides harder to compare.
+    private string? CustomerName { get; set; }
+    private string? Email { get; set; } = "ada@example.com";
+    private string? Notes { get; set; }
+    private string? Region { get; set; } = "Europe";
+    private bool EmailMe { get; set; }
+    private bool IncludeArchived { get; set; } = true;
+    private bool ShowRetired { get; set; }
+    private bool Notifications { get; set; } = true;
+    private string Shipping { get; set; } = "standard";
+
+    private string? LiveEmail { get; set; }
+    private string? LiveEmailError =>
+        string.IsNullOrEmpty(LiveEmail) || LiveEmail.Contains('@') ? null : "Enter an email address.";
+
+    private string? SearchName { get; set; }
+    private string? SearchRegion { get; set; }
+    private bool SearchArchived { get; set; }
+    private bool SearchSubmitted { get; set; }
+
+    private string? SearchNameError =>
+        SearchSubmitted && string.IsNullOrWhiteSpace(SearchName) ? "Enter a name to search for." : null;
+
+    private string? SearchRegionError =>
+        SearchSubmitted && string.IsNullOrWhiteSpace(SearchRegion) ? "Choose a region." : null;
+
+    private string? DialogResult { get; set; }
+    private bool CustomerDeleted { get; set; }
+
+    private async Task ShowInfoDialogAsync()
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(
+            "Changes take effect immediately.",
+            "Save",
+            "Cancel",
+            "Edit customer");
+
+        var result = await dialog.Result;
+
+        DialogResult = result.Cancelled ? "Cancelled" : "Saved";
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(
+            "Their orders stay, but the customer record and its contact details are removed. This cannot be undone.",
+            "Delete customer",
+            "Cancel",
+            "Delete Ada Lovelace?");
+
+        var result = await dialog.Result;
+
+        if (result.Cancelled)
+        {
+            return;
+        }
+
+        CustomerDeleted = true;
+        ToastService.ShowError("Customer deleted.");
+    }
+
+    private void Search()
+    {
+        SearchSubmitted = true;
+
+        if (SearchNameError is not null || SearchRegionError is not null)
+        {
+            return;
+        }
+
+        ToastService.ShowSuccess($"Searched {SearchRegion} for {SearchName}.");
+    }
+
+    private void ClearSearch()
+    {
+        SearchName = null;
+        SearchRegion = null;
+        SearchSubmitted = false;
+    }
+}

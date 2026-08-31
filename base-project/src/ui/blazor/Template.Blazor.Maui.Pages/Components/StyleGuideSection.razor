@@ -1,0 +1,45 @@
+@* The style guide's own chrome, so StyleGuide.razor reads as a list of entries rather than a wall
+   of layout markup. The React guide has the same parts in
+   src/ui/react/src/components/styleguide/parts.tsx, and the two guides list the same sections in
+   the same order on purpose - that side-by-side comparison is the point of this repository
+   carrying two front ends.
+
+   Deliberately not a general-purpose component: nothing outside the guide should use it. *@
+
+<article class="sg-section">
+    <header class="sg-section-header">
+        <h3>@Title</h3>
+        <p class="sg-intent">@Intent</p>
+    </header>
+
+    <div class="sg-section-body">
+        @ChildContent
+    </div>
+
+    <footer class="sg-section-footer">
+        <p class="sg-a11y"><strong>Accessibility.</strong> @Accessibility</p>
+        @if (!string.IsNullOrWhiteSpace(Code))
+        {
+            <pre class="sg-code"><code>@Code</code></pre>
+        }
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>What the component is for, and when to reach for something else.</summary>
+    [Parameter, EditorRequired]
+    public string Intent { get; set; } = string.Empty;
+
+    /// <summary>The keyboard, focus, naming or announcement behaviour that is contractual.</summary>
+    [Parameter, EditorRequired]
+    public string Accessibility { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Code { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

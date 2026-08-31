@@ -1,4 +1,10 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+
+@* Page-view spans. Started here because this layout wraps every page in both hosts, so one
+   subscription covers all of them - and it is inert until a TracerProvider is listening, which is
+   why no enabled check is needed. See Telemetry/NavigationTelemetry.cs. *@
+@inject NavigationTelemetry Navigation
 
 @* No StorageName on FluentDesignTheme: it reads localStorage through JS interop, which needs
    FluentUI's loading-theme.js to avoid a flash of the wrong theme on first paint. Theme state is
@@ -29,10 +35,17 @@
     </FluentFooter>
 </FluentLayout>
 
-@* FluentToastProvider / FluentDialogProvider / FluentTooltipProvider are deliberately absent.
-   Add the one you need when you start using its service - each pulls in a JS module, which the
-   MAUI host loads through _framework/blazor.modules.json. See the note in that host's
-   wwwroot/index.html before touching its script tags. *@
+@* Two of FluentUI's three providers, present because the style guide's Dialog and Toast
+   sections use their services and nothing renders without them. Each pulls in a JS module, which
+   both hosts load through _framework/blazor.modules.json - see the note in the MAUI host's
+   wwwroot/index.html, which records that the module manifest already covers this and no script tag
+   change is needed.
+
+   Under bUnit an imported module resolves to null, so FluentUiTestContext stubs the ones these
+   register. FluentTooltipProvider stays absent: nothing uses ITooltipService yet, and an unused
+   provider is a JS module and a stub for no return. *@
+<FluentDialogProvider />
+<FluentToastProvider />
 
 @code {
     private bool IsDarkTheme
@@ -40,4 +53,8 @@
         get => ThemeStore.IsDark;
         set => ThemeStore.IsDark = value;
     }
+
+    protected override void OnInitialized() => Navigation.Start();
+
+    public void Dispose() => Navigation.Dispose();
 }

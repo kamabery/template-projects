@@ -1,6 +1,114 @@
 /* Shared app styling. Both hosts pull this in as
    _content/Template.Blazor.Maui.Pages/app.css so the two look identical. */
 
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   The same names the React app defines in src/ui/react/src/index.css, so a
+   contract like "the danger button" means one thing across both front ends.
+   Adding a token on one side means adding it on the other.
+
+   These are ALIASES onto FluentUI's own variables wherever Fluent has an
+   equivalent, not restatements of them. That is what makes this layer
+   theme-agnostic for free: FluentDesignTheme rewrites the Fluent variables when
+   the theme flips, so every alias below flips with it and there is no dark-mode
+   duplicate to keep in sync - the same property the React side gets from
+   light-dark().
+
+   Each alias carries a literal fallback, so a component still renders sanely if
+   a Fluent variable is absent (bUnit renders without the theme component, and
+   the intent variables are only emitted once a theme is applied).
+
+   Where Fluent has no equivalent - the -subtle backgrounds - the value is
+   color-mixed from the fill and the current surface, which follows the theme
+   for the same reason.
+   --------------------------------------------------------------------------- */
+:root {
+    /* Surfaces and content */
+    --color-surface: var(--neutral-layer-1, #ffffff);
+    --color-surface-raised: var(--neutral-fill-layer-rest, #ffffff);
+    --color-surface-sunken: var(--neutral-layer-2, #f5f5f5);
+    --color-border-subtle: var(--neutral-stroke-divider-rest, #e0e0e0);
+    --color-border-strong: var(--neutral-stroke-strong-rest, #909090);
+    --color-content: var(--neutral-foreground-rest, #1a1a1a);
+    --color-content-muted: var(--neutral-foreground-hint, #616161);
+    --color-content-disabled: var(--neutral-foreground-hint, #9e9e9e);
+
+    /* Brand */
+    --color-brand: var(--accent-fill-rest, #0f6cbd);
+    --color-brand-subtle: color-mix(in oklab, var(--color-brand) 12%, var(--color-surface));
+
+    /* Intents. Fluent exposes the fills; the subtle backgrounds are mixed from them.
+
+       Fluent's own --info is a neutral grey, which makes an informational message
+       indistinguishable from a neutral one. Aliased to the accent instead, which is what
+       the React side's info intent resolves to - the two have to agree. */
+    --color-intent-info: var(--accent-fill-rest, #0f6cbd);
+    --color-intent-info-subtle: color-mix(in oklab, var(--color-intent-info) 12%, var(--color-surface));
+
+    --color-intent-success: var(--success, #0e700e);
+    --color-intent-success-subtle: color-mix(in oklab, var(--color-intent-success) 12%, var(--color-surface));
+
+    --color-intent-warning: var(--warning, #f7630c);
+    --color-intent-warning-subtle: color-mix(in oklab, var(--color-intent-warning) 14%, var(--color-surface));
+
+    --color-intent-danger: var(--error, #c50f1f);
+    --color-intent-danger-subtle: color-mix(in oklab, var(--color-intent-danger) 12%, var(--color-surface));
+
+    /* The foreground that sits on each solid fill.
+
+       These cannot be literals here the way they are on the React side, where the two
+       palettes are picked by hand. The fills are Fluent's, and Fluent flips its accent
+       LIGHT in the dark theme - white on it measures 1.87:1, which fails WCAG AA outright.
+       So each one is derived from its own fill: black above the lightness threshold, white
+       below it, using relative color syntax. `l` is the fill's OKLCH lightness, and the
+       clamp turns the comparison into the 0 or 1 that becomes the result's lightness.
+
+       The literal above each is the fallback for an engine without relative color syntax -
+       an unsupported declaration is dropped and the previous one stands. Do not remove it.
+
+       If a fill ever needs a foreground these cannot produce, the answer is a different
+       fill, not a hand-picked literal that only holds in one theme. */
+    --color-brand-contrast: #ffffff;
+    --color-brand-contrast: oklch(from var(--color-brand) clamp(0, (0.62 - l) * 100, 1) 0 0);
+
+    --color-intent-info-contrast: #ffffff;
+    --color-intent-info-contrast: oklch(from var(--color-intent-info) clamp(0, (0.62 - l) * 100, 1) 0 0);
+
+    --color-intent-success-contrast: #ffffff;
+    --color-intent-success-contrast: oklch(from var(--color-intent-success) clamp(0, (0.62 - l) * 100, 1) 0 0);
+
+    --color-intent-warning-contrast: #1a1300;
+    --color-intent-warning-contrast: oklch(from var(--color-intent-warning) clamp(0, (0.62 - l) * 100, 1) 0 0);
+
+    --color-intent-danger-contrast: #ffffff;
+    --color-intent-danger-contrast: oklch(from var(--color-intent-danger) clamp(0, (0.62 - l) * 100, 1) 0 0);
+
+    /* Focus. Its own token, not the brand - they only look alike. */
+    --color-focus-ring: var(--focus-stroke-outer, #1a1a1a);
+
+    /* Shape. Fluent's corner radii are unitless multipliers, hence the calc(). */
+    --radius-control: calc(var(--control-corner-radius, 4) * 1px);
+    --radius-surface: calc(var(--layer-corner-radius, 8) * 1px);
+    --radius-pill: 9999px;
+
+    /* Elevation. Fluent exposes no shadow token, so these are literal - and tuned to
+       read on both a light and a dark surface, since there is no light-dark() to use. */
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.24);
+    --shadow-overlay: 0 10px 30px rgb(0 0 0 / 0.32), 0 2px 8px rgb(0 0 0 / 0.24);
+
+    /* Motion */
+    --motion-fast: 120ms;
+    --motion-slow: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-fast: 1ms;
+        --motion-slow: 1ms;
+    }
+}
+
 /* Make FluentLayout fill the viewport so the footer sits at the bottom and only the body
    scrolls. FluentLayout emits .layout; both hosts set html/body to height:100% in their own
    app.css. */
@@ -53,7 +161,7 @@ h1 {
 .forecast-table td {
     text-align: start;
     padding: .4rem .75rem;
-    border-block-end: 1px solid var(--neutral-stroke-divider-rest);
+    border-block-end: 1px solid var(--color-border-subtle);
 }
 
 .forecast-table th {
@@ -70,4 +178,202 @@ h1 {
     display: flex;
     gap: 0.25rem;
     margin-block-end: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   AppField. The one shared form wrapper; see Components/AppField.razor.
+   --------------------------------------------------------------------------- */
+
+.app-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    max-width: 22rem;
+}
+
+.app-field-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-content);
+}
+
+.app-field-required {
+    color: var(--color-intent-danger);
+    margin-inline-start: 0.125rem;
+}
+
+.app-field-description {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-content-muted);
+}
+
+.app-field-error {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-intent-danger);
+}
+
+/* Destructive button. FluentUI has no danger appearance, so this is the approved
+   variant: a Neutral FluentButton wearing the danger intent. */
+.app-button-danger::part(control),
+.app-button-danger button {
+    background: var(--color-intent-danger);
+    color: var(--color-intent-danger-contrast);
+    border-color: var(--color-intent-danger);
+}
+
+/* ---------------------------------------------------------------------------
+   Style guide. Chrome for Pages/StyleGuide.razor and Components/StyleGuide*.razor.
+   Nothing here is approved for product screens.
+   --------------------------------------------------------------------------- */
+
+.sg-page > * + * {
+    margin-block-start: 2.5rem;
+}
+
+.sg-group-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-content-muted);
+    border-block-end: 1px solid var(--color-border-subtle);
+    padding-block-end: 0.5rem;
+    margin-block: 0 1rem;
+}
+
+.sg-section {
+    display: block;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-surface);
+    background: var(--color-surface-raised);
+    margin-block-end: 1.25rem;
+}
+
+.sg-section-header {
+    padding: 1rem 1.25rem;
+    border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.sg-section-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.sg-intent {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-content-muted);
+}
+
+.sg-section-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.sg-section-footer {
+    padding: 1rem 1.25rem;
+    border-block-start: 1px solid var(--color-border-subtle);
+}
+
+.sg-a11y {
+    margin: 0 0 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-content-muted);
+}
+
+.sg-code {
+    margin: 0;
+    overflow-x: auto;
+    padding: 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--color-surface-sunken);
+    font-size: 0.75rem;
+    color: var(--color-content);
+}
+
+.sg-row {
+    display: grid;
+    gap: 0.5rem;
+}
+
+@media (min-width: 40rem) {
+    .sg-row {
+        grid-template-columns: 10rem 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+}
+
+.sg-row-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-content-muted);
+    padding-block-start: 0.25rem;
+}
+
+.sg-row-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sg-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+.sg-swatch {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.sg-chip {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    flex: 0 0 auto;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-control);
+}
+
+.sg-swatch code {
+    font-size: 0.75rem;
+    color: var(--color-content);
+    overflow-wrap: anywhere;
+}
+
+.sg-shape {
+    inline-size: 4rem;
+    block-size: 4rem;
+    display: grid;
+    place-items: center;
+    font-size: 0.625rem;
+    color: var(--color-content-muted);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border-subtle);
+}
+
+.sg-elevation {
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    border-radius: var(--radius-surface);
+    background: var(--color-surface-raised);
+}
+
+.sg-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 24rem;
 }

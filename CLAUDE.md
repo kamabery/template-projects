@@ -150,11 +150,16 @@ src/
   template.api.migrations.postgres/   EF migrations, Postgres only (migration files and nothing else)
   template.api.migrations.sqlserver/  EF migrations, SQL Server only
   template.api.migrations.sqlite/     EF migrations, SQLite only
-  template.servicedefaults/    stock Aspire shared project (OTel, health, resilience)
+  template.servicedefaults/    stock Aspire shared project (OTel, health, resilience) +
+                               SerilogExtensions.cs, which makes Serilog the logging provider
   ui/
-    react/                     Vite + React front end, launched by the AppHost
+    react/                     Vite + React front end, launched by the AppHost.
+                               src/components/ui/ is the design system; src/routes/styleguide.tsx
+                               is the living style guide over it
     blazor/
-      Template.Blazor.Maui.Pages/   Sdk.Razor  ALL the Blazor UI + the MVVM framework
+      Template.Blazor.Maui.Pages/   Sdk.Razor  ALL the Blazor UI + the MVVM framework +
+                                    Telemetry/, the client RUM both hosts share, and
+                                    Pages/StyleGuide.razor, the Blazor half of the style guide
       Template.Blazor.Maui/         Sdk.Razor + UseMaui   MAUI Blazor Hybrid host
       Template.Blazor.Maui.Web/     Sdk.BlazorWebAssembly Blazor WASM host
 tests/
@@ -388,6 +393,71 @@ request still reaches the controller and still returns 200 — it is only missin
 `Access-Control-Allow-Origin` header, which the browser enforces on the client. That asymmetry is
 expensive to diagnose, so `WarnOnMissingCorsOrigins` says it at startup instead.
 
+### Logging — Serilog, configured once
+
+`AddServiceDefaults()` makes Serilog the logging provider for every service, wired in
+`src/template.servicedefaults/SerilogExtensions.cs`. Two sinks: the console, and — whenever the
+AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT` — the dashboard over OTLP. Outside the AppHost the
+OTLP sink is not added at all, which is the same gate `AddOpenTelemetryExporters` already applies.
+
+Three things worth knowing before changing it:
+
+- **Serilog does not read `Logging:LogLevel`.** Levels live under `Serilog:MinimumLevel` in each
+  service's `appsettings.json`; the old sections were replaced rather than left to rot. A missing
+  section is a no-op, not an error. The AppHost keeps its own `Logging` section — it is not a
+  service and does not get Serilog.
+- **Serilog owns the pipeline, not a provider slot.** `AddSerilog` replaces `ILoggerFactory`, and its
+  `writeToProviders` parameter defaults to false, so no `ILoggerProvider` is ever written to. That is
+  what stops the OpenTelemetry logging provider from exporting the same record a second time.
+  `ConfigureSerilog` also calls `ClearProviders()` so the removal is explicit rather than a
+  provider that looks live and is not — which is why it must run *after* `ConfigureOpenTelemetry`.
+  `LoggingConfigurationTests` in the API suite asserts both halves.
+- **`UseSerilogRequestLogging` is deliberately absent.** `AddAspNetCoreInstrumentation` already
+  records every request as a span, and `Microsoft.AspNetCore` is pinned at `Warning`.
+
+### Client RUM — the Blazor hosts
+
+Both Blazor hosts export their own telemetry to the dashboard, the counterpart of
+`src/ui/react/src/lib/telemetry.ts` on the React side. It lives in
+`src/ui/blazor/Template.Blazor.Maui.Pages/Telemetry/` and both hosts call `AddSharedTelemetry` and
+then `ActivateSharedTelemetry` — a third shared registration beside `AddSharedViewModels` and
+`AddSharedProviders`, for the same reason. Page-view spans come from `MainLayout`, which is the one
+component both hosts wrap every page in.
+
+**What each host gets, and why they differ.** MAUI is an ordinary .NET process: traces, metrics and
+logs. The WebAssembly host gets **traces and logs only** — see the WASM constraints below.
+
+**The two hosts get their settings from different places, because their runtimes differ.** MAUI is
+a process the AppHost starts, so `AddEnvironmentVariables()` in `MauiProgram` is enough. A browser
+has no environment to read, and the WASM host's `wwwroot/appsettings.json` is a static file that
+cannot carry the dashboard's per-run OTLP API key — so it asks the API instead, at
+`GET /client-telemetry/config` (`ClientTelemetryController`, Development only, and unconditional
+because `stage.ps1` would strip a `//#if (includeBlazorWeb)` region out of every base scaffold).
+That is also why `api` carries `WithOtlpExporter(OtlpProtocol.HttpProtobuf)` in `apphost.cs`: a
+browser cannot speak gRPC, so the endpoint the API hands out has to be one it can post to.
+
+`ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS` is already `*` in both `.aspire/apphost.run.json` profiles,
+so browser-origin OTLP needs no further dashboard configuration.
+
+**Three WASM constraints, each found the hard way and each silent when broken:**
+
+- **The exporters must take their `HttpClient` from the application's `IHttpClientFactory.`** The
+  OTLP exporter's own default client cannot send from the browser, and it fails with no error the
+  runtime surfaces — spans reach the exporter and no request is ever made. That is why the providers
+  are registered as factories and started by `ActivateSharedTelemetry` rather than built inline. Logs
+  never had the problem, because `AddLogging` composes into the application's own service collection
+  where the factory already lives.
+- **Spans must export one at a time** (`IsSingleThreadedRuntime` → `ExportProcessorType.Simple`).
+  The batching processor drains on a dedicated thread that the browser creates without error and
+  then never runs.
+- **No `MeterProvider` is registered there at all.** Its reader collects on that same never-run
+  thread, and neither `PeriodicTimer` nor `Task.Delay` continuations resume in that host, so there is
+  no way to drive it from the page either. Registering it would be wiring that looks live and is not.
+
+**Do not use `OpenTelemetry.Extensions.Hosting` here.** Its `AddOpenTelemetry()` starts the SDK from
+an `IHostedService`, and a `WebAssemblyHost` never runs hosted services — the providers would be
+configured and then never started, again with nothing to say so.
+
 ### The fault-injection endpoints
 
 `template.api` exposes `/harness/latency`, `/harness/fail-next` and `/harness/reset`, backed by
@@ -519,7 +589,17 @@ now one click from executing.
 a page: a ViewModel in `ViewModels/`, a `.razor` in `Pages/` with
 `@inherits ViewModelComponentBase<T>`, a `NavLink` in `Layout/NavMenu.razor`, and one
 `AddTransient` line in `Mvvm/MvvmServiceCollectionExtensions.AddSharedViewModels`. That single
-method is called by both hosts, which is what stops their service graphs drifting apart.
+method is called by both hosts, which is what stops their service graphs drifting apart. A page
+with no state of its own needs neither — `Home.razor` and `StyleGuide.razor` are plain components.
+
+**New UI goes through the design system, on both sides.** React composes from
+`src/ui/react/src/components/ui/`; Blazor composes from FluentUI, through the mapping the style
+guide documents. `Template.Blazor.Maui.Pages/Components/` holds almost nothing on purpose —
+wrapping FluentUI component-for-component would be an abstraction over single-use code.
+`AppField.razor` is the one exception, and it earns it: FluentUI's label, description and
+validation wiring differs between `FluentTextField`, `FluentSelect` and `FluentCheckbox`, so
+without it every form hand-wires `for` and `aria-describedby` and gets one wrong. A field is
+invalid when `Error` is non-empty — there is no separate flag to fall out of step with the message.
 
 There is **no `StateHasChanged` and no manual refresh call anywhere**. `[ObservableProperty]`
 raises `PropertyChanged`; `ViewModelBinder` subscribes and dispatches
@@ -532,9 +612,15 @@ raises `PropertyChanged`; `ViewModelBinder` subscribes and dispatches
   `FieldIdentifier` from its `ValueExpression`, and that rejects statics. Bind to an instance
   property that proxies the static — `MainLayout.IsDarkTheme` over `ThemeStore.IsDark`, and
   `WeatherForecastViewModel.Unit` over `PreferencesStore.Unit`.
-- **Avoid FluentUI components that ship a JS module** (`FluentNavMenu`, `FluentDataGrid`, the
-  `Fluent*Provider` family). bUnit runs with `JSRuntimeMode.Loose`, under which an imported module
-  resolves to `null`, so those components throw the moment they call into one.
+- **A FluentUI component that ships a JS module is a risk, not a ban.** bUnit runs with
+  `JSRuntimeMode.Loose`, under which an imported module resolves to `null` — so what throws is a
+  component that then *calls into* it. Plenty ship a module and never do: `FluentButton`,
+  `FluentTextField`, `FluentCheckbox`, `FluentTab`, `FluentDivider` and `FluentDialogProvider` all
+  render fine, which `StyleGuidePageTests` is what proves — it renders every approved component in
+  one place, so a FluentUI upgrade that breaks one fails there. `FluentNavMenu` and `FluentDataGrid`
+  are the two that genuinely throw and stay out; the shared nav and the forecast table are hand-rolled
+  because of them. If a component does throw, the fix is a `JSInterop.SetupModule` in
+  `FluentUiTestContext`, not deleting the usage.
 
 ViewModels are **transient**, not scoped: a WASM host has one DI scope for the whole application
 lifetime and a MAUI BlazorWebView's scope spans the entire WebView, so a scoped ViewModel is
@@ -554,13 +640,43 @@ off but `noUnusedLocals` is on, so an unused import fails the build.
 3. TanStack Store (`src/store/preferences.ts`, `src/store/counter.ts`) for client-only UI state
    the server doesn't own.
 
-**Styling (React)** — Tailwind v4 configured in CSS; there is no `tailwind.config.js`. Use the
-semantic tokens defined in `src/ui/react/src/index.css` (`bg-surface`, `bg-surface-raised`,
-`text-content`, `text-content-muted`, `bg-brand`, `border-border-subtle`), never raw palette
-colors like `bg-slate-800` — a raw color has one value and so breaks whichever theme it was not
-picked for. Each token carries both palettes through `light-dark()`, resolved against the
-`color-scheme` set on `:root`; `src/store/preferences.ts` writes `<html data-theme>` and the
-attribute selectors in `index.css` override the OS setting in both directions.
+**Design system** — one token vocabulary, two implementations, and a living style guide per
+front end at `/styleguide`. The guides list the same sections in the same order; keep them aligned.
+
+Tokens are defined twice, deliberately, with no build step between them:
+
+- `src/ui/react/src/index.css`, under Tailwind v4's `@theme` (there is no `tailwind.config.js`).
+  Each color token carries both palettes in **one** definition through `light-dark()`, resolved
+  against the `color-scheme` on `:root` — which is why there is no second dark block, and why
+  `@theme` hoisting to `:root` does not matter. `src/store/preferences.ts` writes
+  `<html data-theme>` and the attribute selectors override the OS setting in both directions.
+- `src/ui/blazor/Template.Blazor.Maui.Pages/wwwroot/app.css`, as **aliases onto FluentUI's own
+  variables** (`--accent-fill-rest`, `--neutral-layer-1`, `--error`, …), each with a literal
+  fallback. `FluentDesignTheme` rewrites those when the theme flips, so the alias layer follows for
+  free — same property the React side gets from `light-dark()`. The `-subtle` backgrounds have no
+  Fluent equivalent and are `color-mix`ed from the fill and the current surface.
+
+The groups: surface/content (`surface`, `surface-raised`, `surface-sunken`, `border-subtle`,
+`border-strong`, `content`, `content-muted`, `content-disabled`), brand (`brand`, `brand-subtle`,
+`brand-contrast`), intents (`intent-{info,success,warning,danger}`, each with `-subtle` and
+`-contrast`), `focus-ring`, shape (`radius-control`, `radius-surface`, `radius-pill`), elevation
+(`shadow-raised`, `shadow-overlay`) and motion (`--motion-fast`, `--motion-slow`).
+
+Three rules:
+
+- **Never a raw value** — not `bg-slate-800`, and not `rounded-lg` or `shadow-sm` either. A raw
+  color has one value and breaks whichever theme it was not picked for; a literal radius or shadow
+  drifts the moment one component is restyled.
+- **Adding a token means adding it to both files.** Nothing enforces that they agree.
+- **A retuned fill needs its pair re-measured.** Every fill/foreground pair was checked against
+  WCAG AA in both palettes and the worst is 5.02:1. The trap is real, not theoretical: `--color-brand`
+  at the 58% lightness that looked right measured 4.2:1, and on the Blazor side white on Fluent's
+  accent measures 1.87:1 in the dark theme — which is why the `-contrast` tokens there are *derived*
+  from their own fill's lightness with `oklch(from … )` rather than written as literals, each with a
+  literal fallback declared first for an engine without relative color syntax.
+- **Motion is not in `@theme`.** Tailwind v4 has no duration namespace, so `--motion-fast` /
+  `--motion-slow` sit on `:root` and are read as `duration-[var(--motion-fast)]`. They collapse to
+  `1ms` under `prefers-reduced-motion`, so no component opts in individually.
 
 **Adding an endpoint** — follow the three-step recipe in `src/ui/react/README.md` for the React
 side; on the Blazor side add the method to the Refit interface in `.Pages/Providers`.
@@ -712,8 +828,39 @@ future session doesn't have to re-read it:
 - Don't edit `src/ui/react/src/routeTree.gen.ts` — it is regenerated on save. Adding a route file
   and then running `tsc` first will fail until the Vite plugin has regenerated it; run
   `npx vite build` (or `npm run dev`) once, then typecheck.
+- Don't call `ConfigureSerilog()` before `ConfigureOpenTelemetry()` in `AddServiceDefaults`. The
+  `ClearProviders()` in it exists to remove the OpenTelemetry logging provider the other one
+  registers; reversed, that provider is left registered and looks live when it is not.
+- Don't reintroduce a `Logging:LogLevel` section for `template.api` or `template.events`. Serilog
+  does not read it, so it would be configuration that silently does nothing.
+- Don't let the Blazor telemetry build its OTLP exporters with the SDK's default `HttpClient`, and
+  don't build the providers inline instead of registering them as factories. The WebAssembly host
+  cannot send with that client and says nothing about it — spans reach the exporter and no request
+  is ever made.
+- Don't add `OpenTelemetry.Extensions.Hosting` to `Template.Blazor.Maui.Pages`, and don't register a
+  `MeterProvider` for the WebAssembly host. Both depend on something that never runs there — a
+  hosted service in the first case, a background thread in the second — and both fail silently.
+- Don't wrap `ClientTelemetryController` in a `//#if (includeBlazorWeb)` region. `stage.ps1` strips
+  that symbol as statically false for `aspire-base`, so the region would be deleted from every base
+  scaffold, including one that adds the Blazor UI afterwards.
 - Don't remove the API's CORS configuration. The React proxy does not need it; the WebAssembly
   host does.
+- Don't add a token to one front end's stylesheet and not the other. `src/ui/react/src/index.css`
+  and `Template.Blazor.Maui.Pages/wwwroot/app.css` declare the same names by hand; nothing catches
+  a drift, and the whole point of the vocabulary is that "the danger button" means one thing on
+  both sides.
+- Don't add a component to one style guide and not the other. `/styleguide` in React and
+  `/styleguide` in Blazor list the same sections in the same order, and that side-by-side reading
+  is the reason this repository carries two front ends. `StyleGuidePageTests` asserts the section
+  count on the Blazor side, so adding one there without the other fails a test — the React side has
+  no such guard, so that direction is on you.
+- Don't reach for a raw color, radius or shadow in either front end. `bg-slate-800`, `rounded-lg`
+  and `shadow-sm` are all the same mistake: a value with no theme behind it and nothing tying it to
+  the rest of the system.
+- Don't remove `FluentDialogProvider` or `FluentToastProvider` from `MainLayout`. `IDialogService`
+  and `IToastService` resolve whether or not their provider is mounted, so removing one breaks the
+  style guide's Dialog and Toast sections at run time with nothing failing at build time.
+  `MainLayoutTests` exists for exactly that.
 - Don't add `UseHttpsRedirection` to the API. It would break the WASM host's CORS preflight and the
   Android emulator's `10.0.2.2` loopback.
 - Don't hand-edit `package-lock.json`.

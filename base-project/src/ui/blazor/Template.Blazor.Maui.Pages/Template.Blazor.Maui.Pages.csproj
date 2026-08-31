@@ -19,6 +19,16 @@
     <PackageReference Include="Refit" />
     <PackageReference Include="Refit.HttpClientFactory" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+
+    <!-- Client-side RUM, shared by both hosts. OpenTelemetry.Extensions.Hosting is deliberately
+         absent: its AddOpenTelemetry() starts the SDK from an IHostedService and a WebAssemblyHost
+         never runs one, so the providers would be configured and never started. Telemetry/ builds
+         them through Sdk.CreateTracerProviderBuilder instead, which is the one shape that behaves
+         identically in the MAUI and WebAssembly hosts. -->
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 
 </Project>

@@ -22,6 +22,11 @@ public static class Extensions
     {
         builder.ConfigureOpenTelemetry();
 
+        // After ConfigureOpenTelemetry, never before: ConfigureSerilog clears the logging providers,
+        // and the one it is there to remove is the OpenTelemetry provider registered above. See
+        // SerilogExtensions.cs.
+        builder.ConfigureSerilog();
+
         builder.AddDefaultHealthChecks();
 
         builder.Services.AddServiceDiscovery();

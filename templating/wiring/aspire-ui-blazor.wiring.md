@@ -85,6 +85,23 @@ still return 200 - they simply arrive without an `Access-Control-Allow-Origin` h
 browser blocks them on the client. `WarnOnMissingCorsOrigins` reports the empty case at startup so
 that asymmetry does not have to be diagnosed the hard way.
 
+## 5. Client telemetry
+
+Nothing to wire — but worth knowing, because it spans both templates.
+
+Both hosts export their own traces and logs to the Aspire dashboard, from
+`src/ui/blazor/Template.Blazor.Maui.Pages/Telemetry/`. The MAUI host also exports metrics; the
+WebAssembly host does not, because its metric reader collects on a background thread the browser
+never runs.
+
+The MAUI host reads its OTLP settings from the environment the AppHost starts it with. The
+WebAssembly host cannot — a browser has no environment, and `wwwroot/appsettings.json` is a static
+file that cannot carry the dashboard's per-run API key — so it fetches them from the API at
+`GET /client-telemetry/config`, which `aspire-base` already ships (Development only). That endpoint
+is why the `api` resource carries `WithOtlpExporter(OtlpProtocol.HttpProtobuf)`: a browser cannot
+speak gRPC, so the endpoint the API hands out has to be one it can post to. Leave that call in place
+if you want RUM from the WebAssembly host.
+
 ---
 
 ## Verify
@@ -94,6 +111,9 @@ dotnet build <Name>.slnx
 dotnet test tests/Template.Blazor.Maui.Tests
 aspire run    # blazor-web should be running; maui appears as "Not started"
 ```
+
+Open the WebAssembly host and move between pages: the dashboard should show a `blazor-web` resource
+with `page_view` spans and the API's own span nested under the client's HTTP call.
 
 ## Notes for the generated docs
 
@@ -109,9 +129,29 @@ aspire run    # blazor-web should be running; maui appears as "Not started"
   lifetime, so a scoped ViewModel is effectively a singleton. Shared state belongs in `Stores/`.
 - **`ValueExpression` cannot reference a static member**, so bind FluentUI inputs to an instance
   property that proxies the static one.
-- **Avoid FluentUI components that ship a JS module** (`FluentNavMenu`, `FluentDataGrid`, the
-  `Fluent*Provider` family): bUnit runs with `JSRuntimeMode.Loose`, under which an imported module
-  resolves to `null` and those components throw.
+- **A FluentUI component that ships a JS module is a risk, not a ban.** bUnit runs with
+  `JSRuntimeMode.Loose`, under which an imported module resolves to `null` - so what throws is a
+  component that then *calls into* it. `FluentButton`, `FluentTextField`, `FluentCheckbox`,
+  `FluentTab` and `FluentDialogProvider` all ship one and render fine; `FluentNavMenu` and
+  `FluentDataGrid` are the two that genuinely throw, which is why the nav menu and the forecast
+  table are hand-rolled. `Pages/StyleGuide.razor` renders every approved component in one place and
+  `StyleGuidePageTests` renders that, so an upgrade that breaks one fails there.
+- **`MainLayout` mounts `FluentDialogProvider` and `FluentToastProvider`.** `IDialogService` and
+  `IToastService` resolve whether or not their provider is mounted, so removing one breaks the
+  dialog and toast paths at run time with nothing failing at build time. `MainLayoutTests` guards it.
+- **The design system is `/styleguide` plus the token block at the top of
+  `Pages/wwwroot/app.css`.** Those tokens (`--color-surface`, `--color-intent-danger`,
+  `--radius-control`, `--shadow-raised`, `--motion-fast`, …) are aliases onto FluentUI's own
+  variables, so they follow `FluentDesignTheme` with no dark-mode duplicate. If this scaffold also
+  has the React front end, the same names are declared there in `src/ui/react/src/index.css` and the
+  two are kept in step by hand - adding a token to one means adding it to the other.
+- **`Components/AppField.razor` is the form contract.** Label, description, validation message and
+  the `aria-describedby` that ties them to the control. Use it rather than wiring FluentUI's own
+  label and validation per input; a field is invalid when `Error` is non-empty.
+- **Client telemetry is registered once, for both hosts**, by `AddSharedTelemetry` followed by
+  `ActivateSharedTelemetry` on the built application. Page-view spans are started from `MainLayout`,
+  the one component both hosts wrap every page in.
 - To add a page: a ViewModel in `ViewModels/`, a `.razor` in `Pages/` with
   `@inherits ViewModelComponentBase<T>`, a `NavLink` in `Layout/NavMenu.razor`, and one
-  `AddTransient` line in `MvvmServiceCollectionExtensions.AddSharedViewModels`.
+  `AddTransient` line in `MvvmServiceCollectionExtensions.AddSharedViewModels`. A page with no
+  state of its own needs neither the ViewModel nor the registration.
