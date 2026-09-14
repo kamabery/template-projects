@@ -1,7 +1,12 @@
 {
   "$schema": "http://json.schemastore.org/template",
   "author": "template-projects",
-  "classifications": [ "Aspire", "React", "Vite", "Web" ],
+  "classifications": [
+    "Aspire",
+    "React",
+    "Vite",
+    "Web"
+  ],
   "identity": "AspireStarter.Ui.React",
   "groupIdentity": "AspireStarter.Ui.React",
   "name": "Aspire starter add-on: React front end",
@@ -10,7 +15,51 @@
   "sourceName": "template",
   "preferNameDirectory": false,
   "defaultName": "AspireApp",
-  "tags": { "language": "C#", "type": "item" },
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "symbols": {
+    "resource": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Resource name",
+      "description": "The singular PascalCase name of the sample resource, e.g. Product. The scaffold's entity, controller, page and tests are named from it. The plural is this plus \"s\" - an irregular plural is a rename after scaffolding, not a second parameter. Pass the SAME value to every template in a scaffold, exactly like -n.",
+      "defaultValue": "Widget",
+      "replaces": "Widget",
+      "fileRename": "Widget"
+    },
+    "resourceLower": {
+      "//": "The lowercase form, for TypeScript identifiers, route paths and file names. A separate symbol because `replaces` is a literal substitution - unlike sourceName, it does not match case variants.",
+      "type": "generated",
+      "generator": "casing",
+      "replaces": "widget",
+      "fileRename": "widget",
+      "parameters": {
+        "source": "resource",
+        "toLower": true
+      }
+    },
+    "nameBlazorProject": {
+      "//": "This template's sourceName is the lowercase `template` and the engine matches it case-sensitively, so the PascalCase `Template.Blazor.*` project names that docs/DESIGN.md and index.css use to point at the Blazor half are not substituted by it. A React scaffold has no Blazor project, but those references still name the counterpart this design system is kept in step with, and a stale `Template.` prefix names something that never existed. Two details are load-bearing: the match is scoped to `Template.Blazor` rather than the bare word, because `Template` alone would also rewrite unrelated PascalCase uses; and the value has to carry the `.Blazor` suffix, because `replaces` swaps the whole matched string for it - a bare name would collapse `Template.Blazor.Maui.Pages` to `<Name>.Maui.Pages`.",
+      "type": "generated",
+      "generator": "join",
+      "replaces": "Template.Blazor",
+      "parameters": {
+        "separator": "",
+        "symbols": [
+          {
+            "type": "ref",
+            "value": "name"
+          },
+          {
+            "type": "const",
+            "value": ".Blazor"
+          }
+        ]
+      }
+    }
+  },
   "sources": [
     {
       "source": "./",
@@ -18,7 +67,9 @@
       "modifiers": [
         {
           "comment": "package-lock.json names @babel/template and @babel/plugin-transform-template-literals. sourceName substitution would rewrite those package names and break npm install, so the file is copied byte for byte.",
-          "copyOnly": [ "src/ui/react/package-lock.json" ]
+          "copyOnly": [
+            "src/ui/react/package-lock.json"
+          ]
         }
       ]
     }

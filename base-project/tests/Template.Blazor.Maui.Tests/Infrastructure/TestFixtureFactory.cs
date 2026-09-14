@@ -36,18 +36,17 @@ public static class TestFixtureFactory
 
         // AutoFixture 4.18.1 predates DateOnly/TimeOnly, so it falls back to the greediest
         // constructor and calls new DateOnly(int, int, int) with three random ints - which throws
-        // ArgumentOutOfRangeException. Anything holding a DateOnly (WeatherForecast, for one) is
-        // unbuildable without these. See the pin note in Directory.Packages.props for why the
-        // version cannot simply move forward.
+        // ArgumentOutOfRangeException. Anything holding one is unbuildable without these. See the
+        // pin note in Directory.Packages.props for why the version cannot simply move forward.
         fixture.Register(() => DateOnly.FromDateTime(fixture.Create<DateTime>()));
         fixture.Register(() => TimeOnly.FromDateTime(fixture.Create<DateTime>()));
 
-        // AutoFixture fills public writable properties, and WeatherForecastViewModel.Unit is a
-        // proxy that writes through to the static PreferencesStore. Left alone, merely asking for a
+        // AutoFixture fills public writable properties, and WidgetsViewModel.Density is a proxy
+        // that writes through to the static PreferencesStore. Left alone, merely asking for a
         // ViewModel randomises a process-wide preference, and whichever test happened to run last
-        // decided what PreferencesStoreTests.Unit_DefaultsToCelsius would see. A test that only
-        // constructs a ViewModel must not have side effects outside itself.
-        fixture.Customize<WeatherForecastViewModel>(composer => composer.OmitAutoProperties());
+        // decided what PreferencesStoreTests.Density_DefaultsToComfortable would see. A test that
+        // only constructs a ViewModel must not have side effects outside itself.
+        fixture.Customize<WidgetsViewModel>(composer => composer.OmitAutoProperties());
 
         return fixture;
     }

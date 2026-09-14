@@ -4,13 +4,12 @@
   "classifications": [
     "Aspire",
     "Wolverine",
-    "Marten",
     "Event Sourcing"
   ],
   "identity": "AspireStarter.Events",
   "groupIdentity": "AspireStarter.Events",
   "name": "Aspire starter add-on: Wolverine event sourcing",
-  "description": "Adds a Wolverine + Marten event-sourcing slice - aggregate handlers, a transactional outbox and an async projection - against its own always-Postgres event store. Emits .scaffold/aspire-events.wiring.md, which lists the solution, AppHost and package-version edits the scaffolding skill applies.",
+  "description": "Adds a Wolverine event-sourcing slice - aggregate handlers, a transactional outbox and an async projection - on the event store that matches the base scaffold's data store: Marten on PostgreSQL, Polecat on SQL Server 2025, or Fisher on SQLite. Emits one .scaffold/aspire-events.<store>.wiring.md, which lists the solution, AppHost and package-version edits the scaffolding skill applies.",
   "shortName": "aspire-events",
   "sourceName": "template",
   "preferNameDirectory": false,
@@ -19,13 +18,51 @@
     "language": "C#",
     "type": "item"
   },
-  "sources": [
-    {
-      "source": "./",
-      "target": "./"
-    }
-  ],
   "symbols": {
+    "resource": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Resource name",
+      "description": "The singular PascalCase name of the sample resource, e.g. Product. The scaffold's entity, controller, page and tests are named from it. The plural is this plus \"s\" - an irregular plural is a rename after scaffolding, not a second parameter. Pass the SAME value to every template in a scaffold, exactly like -n.",
+      "defaultValue": "Widget",
+      "replaces": "Widget",
+      "fileRename": "Widget"
+    },
+    "resourceLower": {
+      "//": "The lowercase form, for TypeScript identifiers, route paths and file names. A separate symbol because `replaces` is a literal substitution - unlike sourceName, it does not match case variants.",
+      "type": "generated",
+      "generator": "casing",
+      "replaces": "widget",
+      "fileRename": "widget",
+      "parameters": {
+        "source": "resource",
+        "toLower": true
+      }
+    },
+    "eventStore": {
+      "type": "parameter",
+      "datatype": "choice",
+      "defaultValue": "marten",
+      "displayName": "Event store",
+      "description": "Which event store backs the slice. This is not an independent choice: it must match the base scaffold's --dbProvider, because the AppHost only declares the events service when Database:Provider agrees with it. dotnet new cannot pass a symbol between two template invocations, which is why it has to be stated again here.",
+      "choices": [
+        {
+          "choice": "marten",
+          "displayName": "Marten (PostgreSQL)",
+          "description": "Pair with --dbProvider postgres. Its own events-pg container, separate from the API's store."
+        },
+        {
+          "choice": "polecat",
+          "displayName": "Polecat (SQL Server 2025 / Azure SQL)",
+          "description": "Pair with --dbProvider sqlserver. A second database on the API's SQL Server, which the AppHost pins to 2025-latest for Polecat's native json type. Adds an optional Azure Service Bus transport, off by default."
+        },
+        {
+          "choice": "fisher",
+          "displayName": "Fisher (SQLite)",
+          "description": "Pair with --dbProvider sqlite. A local file and no container, so the scaffold still needs no Docker at all."
+        }
+      ]
+    },
     "nameLowerFile": {
       "type": "generated",
       "generator": "casing",
@@ -35,5 +72,57 @@
       },
       "fileRename": "template"
     }
-  }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local. servicebus.tf carries no such block and is substituted normally.",
+          "copyOnly": [
+            "IaC/containerapp.events.tf"
+          ]
+        },
+        {
+          "//": "One host project per event store, and only one of them ships. They cannot be a single project with conditional regions: each store declares its own IDocumentSession, SingleStreamProjection and [AggregateHandler], and JasperFx.Events ships a source generator that emits a type per projection, so a project referencing two stores fails to compile. src/shared/ carries everything store-agnostic, always survives, and is linked into the surviving host rather than referenced as an assembly - see its README.",
+          "condition": "(eventStore != 'marten')",
+          "exclude": [
+            "src/template.events/**"
+          ]
+        },
+        {
+          "condition": "(eventStore != 'polecat')",
+          "exclude": [
+            "src/template.events.polecat/**"
+          ]
+        },
+        {
+          "condition": "(eventStore != 'fisher')",
+          "exclude": [
+            "src/template.events.fisher/**"
+          ]
+        },
+        {
+          "//": "One wiring file per store, for the same reason: the AppHost block, the package versions and the appsettings keys all differ. Exactly one reaches the scaffold's .scaffold/ directory.",
+          "condition": "(eventStore != 'marten')",
+          "exclude": [
+            ".scaffold/aspire-events.marten.wiring.md"
+          ]
+        },
+        {
+          "condition": "(eventStore != 'polecat')",
+          "exclude": [
+            ".scaffold/aspire-events.polecat.wiring.md"
+          ]
+        },
+        {
+          "condition": "(eventStore != 'fisher')",
+          "exclude": [
+            ".scaffold/aspire-events.fisher.wiring.md"
+          ]
+        }
+      ]
+    }
+  ]
 }

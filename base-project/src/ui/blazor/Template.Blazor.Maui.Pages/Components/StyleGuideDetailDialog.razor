@@ -1,0 +1,141 @@
+@implements IDialogContentComponent<StyleGuideDetailRequest>
+@inject IDialogService DialogService
+
+@* The detail modal from docs/DESIGN.md section 4.3, as the Blazor side spells it: a per-entity
+   content component shown by IDialogService, not a general-purpose wrapper. A wrapper over a
+   single use is CLAUDE.md section 2 broken to save four lines.
+
+   Header is the identity and its status, never the word "Details" - it is what a screen reader
+   announces on open. The body is read-first and only becomes a form when Edit is pressed. The
+   footer holds one primary action; Close is not one of them. *@
+
+<FluentDialogHeader ShowDismiss="true">
+    <div class="detail-header">
+        <FluentLabel Typo="Typography.PaneHeader">@Content.Customer.Name</FluentLabel>
+        <FluentBadge Appearance="@(Content.Customer.Status == "Active" ? Appearance.Accent : Appearance.Neutral)">
+            @Content.Customer.Status
+        </FluentBadge>
+    </div>
+</FluentDialogHeader>
+
+<FluentDialogBody>
+    @if (Content.ShowSaveFailure)
+    {
+        @* The modal stays open on a failure so the change can be retried. A detail that closes
+           itself leaves the user nothing to retry. *@
+        <div role="alert" data-testid="detail-error">
+            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Title="Could not save">
+                The API returned 500.
+            </FluentMessageBar>
+        </div>
+    }
+
+    @if (Editing)
+    {
+        <AppField Label="Name"
+                  Required="true"
+                  Description="Editing happens in this modal. A second modal to edit what the first one is showing is banned."
+                  Context="field">
+            <FluentTextField Id="@field.ControlId"
+                             aria-describedby="@field.DescribedBy"
+                             @bind-Value="Draft"
+                             @bind-Value:event="oninput"
+                             data-testid="detail-name" />
+        </AppField>
+    }
+    else
+    {
+        <dl class="detail-list" data-testid="detail-read">
+            <dt>Region</dt>
+            <dd>@Content.Customer.Region</dd>
+            <dt>Orders</dt>
+            <dd class="numeric">@Content.Customer.Orders</dd>
+            <dt>Account owner</dt>
+            <dd>@Content.Customer.Owner</dd>
+            <dt>Last order</dt>
+            <dd>@Content.Customer.LastOrder</dd>
+        </dl>
+    }
+</FluentDialogBody>
+
+<FluentDialogFooter>
+    @if (Editing)
+    {
+        <FluentButton Appearance="Appearance.Accent" OnClick="SaveAsync">Save</FluentButton>
+        <FluentButton Appearance="Appearance.Neutral" OnClick="CancelEditAsync">Cancel</FluentButton>
+    }
+    else
+    {
+        <FluentButton Appearance="Appearance.Accent" OnClick="@(() => Editing = true)">Edit</FluentButton>
+        <FluentButton Appearance="Appearance.Neutral" OnClick="CloseAsync">Close</FluentButton>
+        @* Destructive, separated from the other two, and confirmed by its own dialog - the one
+           thing allowed to stack on a detail modal. *@
+        <FluentButton Appearance="Appearance.Neutral" Class="app-button-danger" OnClick="DeleteAsync">
+            Delete
+        </FluentButton>
+    }
+</FluentDialogFooter>
+
+@code {
+    [Parameter, EditorRequired]
+    public StyleGuideDetailRequest Content { get; set; } = default!;
+
+    [CascadingParameter]
+    public FluentDialog Dialog { get; set; } = default!;
+
+    private bool Editing { get; set; }
+
+    private string? Draft { get; set; }
+
+    /// <summary>The edit has unsaved changes, so a dismissal has to ask before discarding.</summary>
+    private bool IsDirty => Editing && Draft != Content.Customer.Name;
+
+    protected override void OnInitialized()
+    {
+        Editing = Content.StartInEdit || Content.ShowSaveFailure;
+        Draft = Content.Customer.Name;
+    }
+
+    private Task SaveAsync() => Dialog.CloseAsync(Content.Customer with { Name = Draft ?? string.Empty });
+
+    private Task CancelEditAsync() => CloseAsync();
+
+    /// <summary>
+    /// The one place Esc and the close button do not simply close: an edit with unsaved changes
+    /// asks first. Everything else about dismissal is FluentDialog's.
+    /// </summary>
+    private async Task CloseAsync()
+    {
+        if (IsDirty)
+        {
+            var confirmation = await DialogService.ShowConfirmationAsync(
+                "The name has been edited and not saved.",
+                "Discard",
+                "Keep editing",
+                "Discard your changes?");
+
+            if ((await confirmation.Result).Cancelled)
+            {
+                return;
+            }
+        }
+
+        await Dialog.CancelAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmation = await DialogService.ShowConfirmationAsync(
+            $"Their orders stay, but {Content.Customer.Name} and their contact details are removed. This cannot be undone.",
+            "Delete customer",
+            "Cancel",
+            $"Delete {Content.Customer.Name}?");
+
+        if ((await confirmation.Result).Cancelled)
+        {
+            return;
+        }
+
+        await Dialog.CancelAsync();
+    }
+}

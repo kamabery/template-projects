@@ -18,7 +18,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <!-- The API integration suite swaps the configured provider for in-memory SQLite so that
-         `dotnet test` still needs no Docker - see Infrastructure/WeatherApiFactory. -->
+         `dotnet test` still needs no Docker - see Infrastructure/ApiFactory. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="xunit" />

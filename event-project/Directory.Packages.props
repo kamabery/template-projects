@@ -11,22 +11,51 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <ItemGroup Label="Wolverine + Marten">
-    <!-- WolverineFx and WolverineFx.Marten ship together and must stay on the same version:
-         the .Marten package's Wolverine dependency is an exact-ish range and mixing them is how
-         you get a MissingMethodException at first message, not a restore error. -->
-    <PackageVersion Include="WolverineFx" Version="6.30.0" />
-    <PackageVersion Include="WolverineFx.Marten" Version="6.30.0" />
+  <ItemGroup Label="Wolverine - core, shared by every event store">
+    <!-- Every WolverineFx.* satellite must stay on the core's exact version: their Wolverine
+         dependency is an exact-ish range, and mixing them is how you get a MissingMethodException
+         at first message rather than a restore error. -->
+    <PackageVersion Include="WolverineFx" Version="6.33.0" />
     <!-- Not optional. As of Wolverine 6 the core package no longer ships the Roslyn runtime
          compiler, and Wolverine's default TypeLoadMode.Dynamic compiles handler glue at startup -
          without this the service throws InvalidOperationException before serving anything. The
          alternative is pre-generating code (the `codegen write` command) and switching to
          TypeLoadMode.Static, which buys faster cold starts at the cost of a build step that has to
          be re-run whenever a handler changes. Wrong trade for a scaffold; see Program.cs. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.30.0" />
-    <!-- Marten arrives transitively via WolverineFx.Marten; pinned explicitly anyway so the event
-         store's version is visible here rather than inferred from a dependency graph. -->
-    <PackageVersion Include="Marten" Version="9.29.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.33.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Event stores - one per host project, never two in the same project">
+    <!-- The event store follows Database:Provider. Marten on Postgres, Polecat on SQL Server 2025,
+         Fisher on SQLite; all three are JasperFx, all three are MIT, and all three present the same
+         API - AddX(...).IntegrateWithWolverine().AddAsyncDaemon(...) and [AggregateHandler] over
+         FetchForWriting. What differs is only which assembly those names come from, which is why
+         there is a host project per store rather than conditional regions in one.
+
+         A project may reference exactly ONE of these. JasperFx.Events ships a source generator that
+         emits an evolver type per projection, so two stores in one project fail to compile with
+         duplicate generated types (CS0433) - a confusing error a long way from its cause. -->
+    <PackageVersion Include="WolverineFx.Marten" Version="6.33.0" />
+    <PackageVersion Include="Marten" Version="9.30.0" />
+    <PackageVersion Include="WolverineFx.Polecat" Version="6.33.0" />
+    <!-- Polecat is Marten's API on SQL Server 2025, and it needs 2025 specifically: it stores events
+         and documents in the native json column type and generates JSON_OBJECT / GENERATE_SERIES.
+         The AppHost pins mssql/server:2025-latest for that reason. Azure SQL Database has the
+         native json type GA, so the deployed path needs nothing extra. -->
+    <PackageVersion Include="Polecat" Version="5.22.0" />
+    <PackageVersion Include="WolverineFx.Fisher" Version="6.33.0" />
+    <!-- Fisher keeps the sqlite branch's promise that nothing needs Docker: a local file, no
+         container. It is much newer than Marten and Polecat (1.0.x), which is the trade a scaffold
+         makes for that promise. -->
+    <PackageVersion Include="Fisher" Version="1.0.7" />
+  </ItemGroup>
+
+  <ItemGroup Label="Transports">
+    <!-- Azure Service Bus, used only by the Polecat host and only when Events:Transport says so.
+         Wolverine's own emulator support (UseAzureServiceBusEmulator) is what makes the local run
+         work with no Azure subscription; the default path uses durable local queues and needs
+         neither this broker nor the emulator container. -->
+    <PackageVersion Include="WolverineFx.AzureServiceBus" Version="6.33.0" />
   </ItemGroup>
 
   <ItemGroup Label="ASP.NET Core">

@@ -480,3 +480,20 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Terraform. Note what is NOT here: .terraform.lock.hcl and IaC/envs/*.tfvars are committed on
+# purpose - the lock pins provider versions the same way Directory.Packages.props pins packages,
+# and the tfvars files are the environment definitions, not secrets.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# Generated database passwords end up in state, and a plan file holds them too.
+terraform.tfvars
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

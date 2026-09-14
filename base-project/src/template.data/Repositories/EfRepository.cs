@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 namespace template.data.Repositories;
 
 /// <summary>
-/// The one <see cref="IRepository{TEntity}"/> implementation, over <see cref="WeatherDbContext"/>.
+/// The one <see cref="IRepository{TEntity}"/> implementation, over <see cref="AppDbContext"/>.
 /// </summary>
 /// <remarks>
 /// Registered open-generic (see PersistenceConfigurator), so asking for IRepository&lt;Thing&gt;
@@ -11,7 +11,7 @@ namespace template.data.Repositories;
 /// a unit of work: there is no operation here that spans two entities, and a UoW that only ever
 /// wraps one SaveChanges is ceremony.
 /// </remarks>
-public class EfRepository<TEntity>(WeatherDbContext context) : IRepository<TEntity>
+public class EfRepository<TEntity>(AppDbContext context) : IRepository<TEntity>
     where TEntity : class
 {
     private DbSet<TEntity> Set => context.Set<TEntity>();

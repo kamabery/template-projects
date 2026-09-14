@@ -46,8 +46,8 @@ public static partial class MauiProgram
         // it - is erased by the compiler, so the Release build carries neither the call nor the
         // developer-tools dependency.
         //
-        // This was a conditional-compilation block until the repository became template source.
-        // The scaffolding engine treats a C# preprocessor directive in a .cs file as one of *its*
+        // This was a conditional-compilation block until the repository became packaged for
+        // scaffolding. The engine treats a C# preprocessor directive in a .cs file as one of *its*
         // conditionals, whatever the symbol, and deletes the region - a scaffolded MAUI host
         // silently lost these two lines. Selecting a file from MSBuild says the same thing and
         // survives scaffolding intact.

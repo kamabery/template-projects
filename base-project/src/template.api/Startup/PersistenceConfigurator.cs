@@ -15,7 +15,7 @@ namespace template.api.Startup;
 /// collapses this to whichever one was asked for and prunes the other migrations projects with
 /// it.</para>
 /// <para>The Aspire client integrations are used rather than a plain AddDbContext. They resolve the
-/// connection string the AppHost injects under ConnectionStrings:weatherdb, and they also register
+/// connection string the AppHost injects under ConnectionStrings:appdb, and they also register
 /// an EF health check (so the api resource reports unhealthy when the database is down rather than
 /// throwing on the first request), EF and ADO OpenTelemetry spans that appear under the api's
 /// requests in the dashboard's trace view, and retry-on-transient-failure.</para>
@@ -34,7 +34,7 @@ public static class PersistenceConfigurator
         {
             // No Aspire client integration here, unlike the two branches below. SQLite is a local
             // file rather than a service, so there is no container for the AppHost to start and
-            // nothing to inject a connection string for - the AppHost sets ConnectionStrings__weatherdb
+            // nothing to inject a connection string for - the AppHost sets ConnectionStrings__appdb
             // directly. AddDbContextPool, not AddDbContext, to match the lifetime the Aspire
             // integrations register on the other two branches, so the test suite's override behaves
             // the same way whichever provider was scaffolded.
@@ -43,9 +43,9 @@ public static class PersistenceConfigurator
             // resource's /health does not cover the database. That is the honest reading - a missing
             // file is a startup failure, not a dependency outage - and adding one would mean taking
             // a new package for a provider that cannot be unreachable.
-            builder.Services.AddDbContextPool<WeatherDbContext>(options => options.UseSqlite(
+            builder.Services.AddDbContextPool<AppDbContext>(options => options.UseSqlite(
                 builder.Configuration.GetConnectionString(DatabaseProvider.ConnectionName)
-                    ?? "Data Source=weather.db",
+                    ?? "Data Source=app.db",
                 sqlite => sqlite.MigrationsAssembly(DatabaseProvider.SqliteMigrationsAssembly)));
         }
 //#endif
@@ -53,7 +53,7 @@ public static class PersistenceConfigurator
 //#if (dbProvider == "sqlserver")
         if (DatabaseProvider.IsSqlServer(provider))
         {
-            builder.AddSqlServerDbContext<WeatherDbContext>(
+            builder.AddSqlServerDbContext<AppDbContext>(
                 DatabaseProvider.ConnectionName,
                 configureDbContextOptions: options => options.UseSqlServer(
                     sql => sql.MigrationsAssembly(DatabaseProvider.SqlServerMigrationsAssembly)));
@@ -63,7 +63,7 @@ public static class PersistenceConfigurator
 //#if (dbProvider == "postgres")
         if (!DatabaseProvider.IsSqlite(provider) && !DatabaseProvider.IsSqlServer(provider))
         {
-            builder.AddNpgsqlDbContext<WeatherDbContext>(
+            builder.AddNpgsqlDbContext<AppDbContext>(
                 DatabaseProvider.ConnectionName,
                 configureDbContextOptions: options => options.UseNpgsql(
                     npgsql => npgsql.MigrationsAssembly(DatabaseProvider.PostgresMigrationsAssembly)));
@@ -98,7 +98,7 @@ public static class PersistenceConfigurator
         }
 
         await using var scope = app.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WeatherDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         if (context.Database.GetMigrations().Any())
         {
@@ -109,7 +109,7 @@ public static class PersistenceConfigurator
             await context.Database.EnsureCreatedAsync();
         }
 
-        await WeatherSeeder.SeedAsync(context);
+        await WidgetSeeder.SeedAsync(context);
 
         return app;
     }

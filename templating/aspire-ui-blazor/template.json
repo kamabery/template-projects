@@ -20,6 +20,26 @@
     "type": "item"
   },
   "symbols": {
+    "resource": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Resource name",
+      "description": "The singular PascalCase name of the sample resource, e.g. Product. The scaffold's entity, controller, page and tests are named from it. The plural is this plus \"s\" - an irregular plural is a rename after scaffolding, not a second parameter. Pass the SAME value to every template in a scaffold, exactly like -n.",
+      "defaultValue": "Widget",
+      "replaces": "Widget",
+      "fileRename": "Widget"
+    },
+    "resourceLower": {
+      "//": "The lowercase form, for TypeScript identifiers, route paths and file names. A separate symbol because `replaces` is a literal substitution - unlike sourceName, it does not match case variants.",
+      "type": "generated",
+      "generator": "casing",
+      "replaces": "widget",
+      "fileRename": "widget",
+      "parameters": {
+        "source": "resource",
+        "toLower": true
+      }
+    },
     "web": {
       "type": "parameter",
       "datatype": "bool",
@@ -41,9 +61,17 @@
       "target": "./",
       "modifiers": [
         {
+          "//": "CSS declares a grid property whose name contains this template's sourceName, so substitution would rewrite the property itself - the declaration then parses as unknown and the browser drops it, with no build error and nothing for bUnit to catch, because it does not evaluate CSS. The file needs no substitution of its own: its comments name neither a project nor the sample resource, and Assert-ResourceTokenSafe in stage.ps1 is what keeps it that way.",
+          "copyOnly": [
+            "src/ui/blazor/Template.Blazor.Maui.Pages/wwwroot/app.css"
+          ]
+        },
+        {
+          "//": "The WebAssembly host is the only deployable web front end here, so its Static Web App goes with it. The MAUI host provisions nothing - it is a client, not a workload.",
           "condition": "(!web)",
           "exclude": [
-            "src/ui/blazor/Template.Blazor.Maui.Web/**"
+            "src/ui/blazor/Template.Blazor.Maui.Web/**",
+            "IaC/frontend.blazor-web.tf"
           ]
         },
         {

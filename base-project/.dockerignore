@@ -1,0 +1,31 @@
+# Build output and package caches. Everything here is either regenerated inside the image or has no
+# business being in the build context.
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/dev-dist/
+**/.vite/
+**/.tanstack/
+
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+
+# Terraform state can contain generated credentials. It must never enter a build context.
+IaC/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+
+# The SQLite branch writes its store beside the built API.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+**/*.user
+**/*.suo
+Dockerfile
+.dockerignore

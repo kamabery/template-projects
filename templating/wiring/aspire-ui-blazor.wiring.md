@@ -87,7 +87,7 @@ that asymmetry does not have to be diagnosed the hard way.
 
 ## 5. Client telemetry
 
-Nothing to wire — but worth knowing, because it spans both templates.
+Nothing to wire — but worth knowing, because it spans both hosts.
 
 Both hosts export their own traces and logs to the Aspire dashboard, from
 `src/ui/blazor/Template.Blazor.Maui.Pages/Telemetry/`. The MAUI host also exports metrics; the
@@ -101,6 +101,27 @@ file that cannot carry the dashboard's per-run API key — so it fetches them fr
 is why the `api` resource carries `WithOtlpExporter(OtlpProtocol.HttpProtobuf)`: a browser cannot
 speak gRPC, so the endpoint the API hands out has to be one it can post to. Leave that call in place
 if you want RUM from the WebAssembly host.
+
+---
+
+## 6. `IaC/` — one file, and a CORS pass that is not optional
+
+`IaC/frontend.blazor-web.tf` was added by this add-on when `--web true`, and Terraform loads it
+automatically - there is nothing to merge. But **two steps happen outside Terraform and both fail
+silently**:
+
+- **The Static Web App's hostname has to reach the API's `Cors:AllowedOrigins`.** It cannot happen
+  in one pass: `IaC/containerapp.api.tf` is part of the base scaffold and cannot reference a
+  resource declared in an add-on file. So apply once, then put `terraform output blazor_web_url`
+  into `cors_allowed_origins` in `IaC/envs/<environment>.tfvars` and apply again. The shipped
+  `.github/workflows/deploy.yml` does this automatically. Skip it and the page loads, the API logs
+  healthy 200s, and every request fails in the browser - the exact asymmetry
+  `WarnOnMissingCorsOrigins` exists to warn about.
+- **`wwwroot/appsettings.json` has `ApiBaseAddress` hard-coded** to the local API port. It is a
+  static file the browser fetches, so nothing in the platform can inject it; the deploy workflow
+  rewrites it to the API's address before uploading.
+
+The MAUI host, if this scaffold has one, provisions nothing. It is a client, not a workload.
 
 ---
 

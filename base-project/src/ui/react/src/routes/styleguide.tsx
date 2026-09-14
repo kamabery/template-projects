@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import type { FormEvent, ReactNode } from 'react'
+import { Link, createFileRoute } from '@tanstack/react-router'
 import { Group, Row, Section, Swatch, SwatchGrid } from '@/components/styleguide/parts'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,7 @@ import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs'
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
+import { cn } from '@/lib/cn'
 
 export const Route = createFileRoute('/styleguide')({ component: StyleGuidePage })
 
@@ -32,7 +33,7 @@ export const Route = createFileRoute('/styleguide')({ component: StyleGuidePage 
  * Living style guide. Every approved component, every variant, every state.
  *
  * It ships in production builds rather than being gated on DEV: it is the
- * documentation for a starter template, and the Blazor guide at the same path
+ * documentation for a starter project, and the Blazor guide at the same path
  * cannot be gated as cheaply, so gating this one would only make the two drift.
  */
 function StyleGuidePage() {
@@ -89,6 +90,12 @@ function StyleGuidePage() {
         <ValidationSection />
         <SearchFormPattern />
         <DestructivePattern />
+      </Group>
+
+      <Group title="Page composition">
+        <DashboardSection />
+        <ListWithModalDetailSection />
+        <DetailModalAnatomySection />
       </Group>
     </div>
   )
@@ -620,7 +627,7 @@ function BreadcrumbSection() {
       <Row label="Default">
         <Breadcrumb>
           <BreadcrumbItem href="/">Home</BreadcrumbItem>
-          <BreadcrumbItem href="/weather">Customers</BreadcrumbItem>
+          <BreadcrumbItem href="/widgets">Customers</BreadcrumbItem>
           <BreadcrumbItem current>Ada Lovelace</BreadcrumbItem>
         </Breadcrumb>
       </Row>
@@ -634,15 +641,14 @@ function NavigationSection() {
       title="Navigation"
       intent="Movement between the screens of the application. The header uses exactly this component - what you see below is the same code."
       a11y="One labelled nav landmark. The router marks the active link with aria-current=page, so the active state is not carried by color alone."
-      code={'<NavBar>\n  <NavItem to="/" exact>Home</NavItem>\n  <NavItem to="/weather">Weather</NavItem>\n</NavBar>'}
+      code={'<NavBar>\n  <NavItem to="/" exact>Home</NavItem>\n  <NavItem to="/widgets">Widgets</NavItem>\n</NavBar>'}
     >
       <Row label="Default">
         <NavBar label="Style guide example">
           <NavItem to="/" exact>
             Home
           </NavItem>
-          <NavItem to="/counter">Counter</NavItem>
-          <NavItem to="/weather">Weather</NavItem>
+          <NavItem to="/widgets">Widgets</NavItem>
         </NavBar>
       </Row>
     </Section>
@@ -885,6 +891,579 @@ function DestructivePattern() {
           confirmLabel="Delete customer"
         />
       </Row>
+    </Section>
+  )
+}
+
+/* -------------------------------------------------------- Page composition */
+
+/*
+ * The three page archetypes: a dashboard home, a list, and the detail modal the
+ * list opens. docs/DESIGN.md section 4 is the doctrine; these are the specimens.
+ *
+ * Every specimen below holds the open row in local state, because the guide is a
+ * single route and cannot navigate. A product screen must put it in the URL
+ * instead - the snippet under each section shows that form, and the intent text
+ * says so. Copying the specimen rather than the snippet is the mistake this
+ * comment exists to stop.
+ */
+
+interface SpecimenCustomer {
+  id: string
+  name: string
+  region: string
+  orders: number
+  lastOrder: string
+  status: 'Active' | 'Suspended'
+  owner: string
+}
+
+const specimenCustomers: SpecimenCustomer[] = [
+  {
+    id: 'ada',
+    name: 'Ada Lovelace',
+    region: 'Europe',
+    orders: 128,
+    lastOrder: '4 Sep 2026',
+    status: 'Active',
+    owner: 'Grace Hopper',
+  },
+  {
+    id: 'alan',
+    name: 'Alan Turing',
+    region: 'Europe',
+    orders: 94,
+    lastOrder: '2 Sep 2026',
+    status: 'Active',
+    owner: 'Grace Hopper',
+  },
+  {
+    id: 'katherine',
+    name: 'Katherine Johnson',
+    region: 'North America',
+    orders: 12,
+    lastOrder: '17 Aug 2026',
+    status: 'Suspended',
+    owner: 'Jean Bartik',
+  },
+]
+
+/**
+ * A dashboard tile. A link, not a div with a handler: middle-click and "open in
+ * new tab" have to work, and its accessible name says what it counts rather
+ * than reading out a bare number.
+ */
+function StatTile({
+  label,
+  value,
+  qualifier,
+  name,
+}: {
+  label: string
+  value: string
+  qualifier: string
+  name: string
+}) {
+  return (
+    <Link
+      to="/widgets"
+      aria-label={name}
+      className={cn(
+        'block min-w-40 flex-1 rounded-surface border border-border-subtle bg-surface-raised p-4',
+        'shadow-raised transition-colors duration-[var(--motion-fast)] hover:border-border-strong',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring',
+      )}
+    >
+      <span className="text-xs font-semibold tracking-wide text-content-muted uppercase">
+        {label}
+      </span>
+      <span className="mt-1 block text-3xl font-semibold tabular-nums">{value}</span>
+      <span className="text-sm text-content-muted">{qualifier}</span>
+    </Link>
+  )
+}
+
+/** One dashboard panel: a heading, a few rows, and the way through to them all. */
+function Panel({
+  title,
+  busy,
+  children,
+}: {
+  title: string
+  busy?: boolean
+  children: ReactNode
+}) {
+  return (
+    <section
+      aria-label={title}
+      aria-busy={busy}
+      className="w-full rounded-surface border border-border-subtle bg-surface-raised"
+    >
+      <header className="flex items-center justify-between gap-4 border-b border-border-subtle px-4 py-3">
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <Link
+          to="/widgets"
+          className="rounded-control text-sm text-brand underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          View all
+        </Link>
+      </header>
+      <div className="p-4">{children}</div>
+    </section>
+  )
+}
+
+function DashboardSection() {
+  return (
+    <Section
+      title="Dashboard home"
+      intent={
+        <>
+          The home route, and the only screen that is one. It answers what the
+          state of the data is right now - every entity the application owns has a
+          tile and a panel here. A welcome message, a stack list or a description
+          of the application is a README that got rendered; put it in{' '}
+          <code>README.md</code>, not on <code>/</code>.
+        </>
+      }
+      a11y={
+        <>
+          A tile is a link, so middle-click and "open in new tab" work and the
+          keyboard reaches it for free. Its accessible name says what it counts -
+          "12 customers suspended", not "12". Each panel is its own labelled
+          region and carries its own <code>aria-busy</code>, so one slow query
+          neither blocks nor silences the rest of the page.
+        </>
+      }
+      code={
+        '<Link to="/customers" search={{ status: "suspended" }} aria-label="12 customers suspended">'
+      }
+    >
+      <Row label="Stat tiles">
+        <div className="flex w-full flex-wrap gap-3">
+          <StatTile
+            label="Customers"
+            value="234"
+            qualifier="18 added this week"
+            name="234 customers, 18 added this week"
+          />
+          <StatTile
+            label="Suspended"
+            value="12"
+            qualifier="Needs review"
+            name="12 customers suspended, needs review"
+          />
+          <StatTile
+            label="Orders today"
+            value="41"
+            qualifier="9 awaiting dispatch"
+            name="41 orders today, 9 awaiting dispatch"
+          />
+        </div>
+      </Row>
+
+      <Row label="Entity panel">
+        <Panel title="Recently active customers">
+          <ul className="space-y-2 text-sm">
+            {specimenCustomers.map((customer) => (
+              <li key={customer.id} className="flex items-center justify-between gap-3">
+                <span>{customer.name}</span>
+                <span className="flex items-center gap-2 text-content-muted">
+                  <span className="tabular-nums">{customer.orders}</span>
+                  {customer.status === 'Suspended' && (
+                    <Badge intent="warning">Suspended</Badge>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </Row>
+
+      <Row label="Loading">
+        <Panel title="Recently active customers" busy>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </Panel>
+      </Row>
+
+      <Row label="Failed">
+        <Panel title="Orders awaiting dispatch">
+          {/* The failure is inside the panel that owns the query. The rest of the
+              dashboard stays usable, which is the whole point of per-panel loading. */}
+          <Alert intent="danger" title="Could not load orders">
+            The API returned 500.{' '}
+            <button type="button" className="underline">
+              Retry
+            </button>
+          </Alert>
+        </Panel>
+      </Row>
+
+      <Row label="First run">
+        <Panel title="Customers">
+          <div className="space-y-3 text-sm">
+            <p className="text-content-muted">
+              No customers yet. Add the first one and it appears here and on{' '}
+              <code>/customers</code>.
+            </p>
+            <Button>Add a customer</Button>
+          </div>
+        </Panel>
+      </Row>
+    </Section>
+  )
+}
+
+function ListWithModalDetailSection() {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const open = specimenCustomers.find((customer) => customer.id === openId) ?? null
+
+  return (
+    <Section
+      title="List with modal detail"
+      intent={
+        <>
+          A list route, whose rows open the detail in front of it. The list keeps
+          its scroll position, its filters, its sort and its density; a detail{' '}
+          <em>page</em> throws all of that away and offers the back button as the
+          apology. In a product screen the open row is the URL - a child route
+          here, a query parameter in Blazor - so refresh, deep link, share and
+          Back all work. This specimen uses component state because the guide is
+          one page and cannot route.
+        </>
+      }
+      a11y={
+        <>
+          The row is one real control: a button that fills the cell and stretches
+          over the row with an <code>::after</code> overlay, so the whole row is
+          the hit target while Enter and Space still work. A trailing action sits
+          above that overlay and is a second, separately named control. Closing
+          returns focus to the row that opened it - <code>&lt;dialog&gt;</code>{' '}
+          does that for a button it was opened from, which is the other reason the
+          row is a button.
+        </>
+      }
+      code={
+        "// src/routes/customers.$customerId.tsx renders over the list\n" +
+        "<button onClick={() => navigate({ to: '/customers/$customerId', params: { customerId: c.id } })}\n" +
+        '        className="after:absolute after:inset-0 after:content-[\'\']">{c.name}</button>'
+      }
+    >
+      <Row label="Default">
+        <div className="w-full">
+        <Table caption="Customers">
+          <Thead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Region</Th>
+              <Th numeric>Orders</Th>
+              <Th>
+                <span className="sr-only">Actions</span>
+              </Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {specimenCustomers.map((customer) => (
+              <Tr
+                key={customer.id}
+                className={cn(
+                  'relative transition-colors duration-[var(--motion-fast)] hover:bg-surface-sunken',
+                  // The open row stays marked while the modal is up, so closing it
+                  // lands the eye back where the click started.
+                  openId === customer.id && 'bg-surface-sunken',
+                )}
+              >
+                <Td>
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(customer.id)}
+                    className={cn(
+                      'rounded-control text-start font-medium',
+                      "after:absolute after:inset-0 after:content-['']",
+                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring',
+                    )}
+                  >
+                    {customer.name}
+                  </button>
+                </Td>
+                <Td>{customer.region}</Td>
+                <Td numeric>{customer.orders}</Td>
+                <Td>
+                  {/* Above the overlay, or it is unreachable: z-10 is what keeps
+                      a row action from being swallowed by the row trigger. */}
+                  <span className="relative z-10 flex justify-end">
+                    <Button variant="ghost" size="sm">
+                      Archive
+                    </Button>
+                  </span>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+        </div>
+      </Row>
+
+      <Row label="Loading">
+        <div className="w-full">
+        <Table caption="Customers, loading">
+          <Thead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Region</Th>
+              <Th numeric>Orders</Th>
+            </Tr>
+          </Thead>
+          <Tbody aria-busy="true">
+            {/* Skeleton rows, not a centred spinner: the header and the column
+                widths survive, so nothing reflows when the data lands. */}
+            {[0, 1, 2].map((row) => (
+              <Tr key={row}>
+                <Td>
+                  <Skeleton className="h-4 w-32" />
+                </Td>
+                <Td>
+                  <Skeleton className="h-4 w-24" />
+                </Td>
+                <Td numeric>
+                  <Skeleton className="ms-auto h-4 w-10" />
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+        </div>
+      </Row>
+
+      <Row label="Empty">
+        <div className="space-y-3 text-sm">
+          <p className="text-content-muted">
+            No customers match this filter. Clear it, or add the first customer.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="secondary">Clear filters</Button>
+            <Button>Add a customer</Button>
+          </div>
+        </div>
+      </Row>
+
+      <Row label="Open the detail">
+        <Button variant="secondary" onClick={() => setOpenId('ada')}>
+          Open Ada Lovelace
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setLoading(true)
+            setOpenId('katherine')
+          }}
+        >
+          Open with the body still loading
+        </Button>
+      </Row>
+
+      <DetailDialog
+        key={openId ?? 'closed'}
+        customer={open}
+        loading={loading}
+        onClose={() => {
+          setOpenId(null)
+          setLoading(false)
+        }}
+      />
+    </Section>
+  )
+}
+
+/**
+ * The detail modal itself. Read-first, editable in place, and it opens with the
+ * identity the row already handed it rather than waiting on a fetch.
+ */
+function DetailDialog({
+  customer,
+  loading = false,
+  startInEdit = false,
+  failed = false,
+  onClose,
+}: {
+  customer: SpecimenCustomer | null
+  loading?: boolean
+  startInEdit?: boolean
+  failed?: boolean
+  onClose: () => void
+}) {
+  const [editing, setEditing] = useState(startInEdit)
+  const [name, setName] = useState(customer?.name ?? '')
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+
+  const dirty = editing && customer !== null && name !== customer.name
+
+  function reset() {
+    setEditing(startInEdit)
+    setName(customer?.name ?? '')
+    setConfirmDiscard(false)
+    onClose()
+  }
+
+  // The one case where Esc does not simply close: unsaved edits ask first.
+  function requestClose() {
+    if (dirty) {
+      setConfirmDiscard(true)
+      return
+    }
+
+    reset()
+  }
+
+  if (!customer) {
+    return null
+  }
+
+  return (
+    <>
+      <Dialog
+        open
+        onClose={requestClose}
+        // The identity, not the word "Details" - this is what is announced on open.
+        title={
+          <span className="flex items-center gap-2">
+            {customer.name}
+            <Badge intent={customer.status === 'Active' ? 'success' : 'warning'}>
+              {customer.status}
+            </Badge>
+          </span>
+        }
+        description={editing ? 'Editing. Save or discard before closing.' : undefined}
+        footer={
+          editing ? (
+            <>
+              <Button variant="secondary" onClick={requestClose}>
+                Cancel
+              </Button>
+              <Button onClick={reset}>Save</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="danger" onClick={reset}>
+                Delete
+              </Button>
+              <Button variant="secondary" onClick={reset}>
+                Close
+              </Button>
+              <Button onClick={() => setEditing(true)}>Edit</Button>
+            </>
+          )
+        }
+      >
+        {failed && (
+          <Alert intent="danger" title="Could not save">
+            The API returned 500. The modal stays open so the change can be
+            retried - a detail that closes itself on failure leaves nothing to
+            retry.
+          </Alert>
+        )}
+
+        {editing ? (
+          <Field>
+            <FieldLabel>Name</FieldLabel>
+            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <FieldDescription>
+              Editing happens in this modal. A second modal to edit what the first
+              one is showing is banned.
+            </FieldDescription>
+          </Field>
+        ) : (
+          <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-2">
+            <dt className="text-content-muted">Region</dt>
+            <dd>{customer.region}</dd>
+            <dt className="text-content-muted">Orders</dt>
+            <dd className="tabular-nums">{customer.orders}</dd>
+            <dt className="text-content-muted">Account owner</dt>
+            {/* Opened from the row with what the row already knew; whatever still
+                has to be fetched is a skeleton, never a spinner-only modal. */}
+            <dd>{loading ? <Skeleton className="h-4 w-28" /> : customer.owner}</dd>
+            <dt className="text-content-muted">Last order</dt>
+            <dd>{loading ? <Skeleton className="h-4 w-24" /> : customer.lastOrder}</dd>
+          </dl>
+        )}
+      </Dialog>
+
+      {/* The only thing allowed on top of a detail modal: a confirmation. */}
+      <ConfirmDialog
+        open={confirmDiscard}
+        destructive
+        title="Discard your changes?"
+        description="The name has been edited and not saved."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={reset}
+        onClose={() => setConfirmDiscard(false)}
+      />
+    </>
+  )
+}
+
+function DetailModalAnatomySection() {
+  const [state, setState] = useState<'read' | 'edit' | 'failed' | null>(null)
+
+  return (
+    <Section
+      title="Detail modal anatomy"
+      intent={
+        <>
+          Header, body, footer. The header is the entity's identity and its
+          status, never the word "Details". The body is read-first - label and
+          value pairs, not a form until the user asks for one - and it opens
+          immediately with what the row already knew, with skeletons for whatever
+          is still being fetched. The footer holds at most one primary action, and
+          Close is not one of them.
+        </>
+      }
+      a11y={
+        <>
+          The dialog's accessible name is the entity's identity, so a screen
+          reader announces which record opened. Esc, the backdrop and the close
+          button are one dismissal path - except while an edit is dirty, when all
+          three ask first. The discard confirmation is the only thing allowed to
+          stack on a detail modal, and Cancel takes its initial focus.
+        </>
+      }
+      code={
+        "const { customerId } = Route.useParams()\n" +
+        "<Dialog open onClose={() => navigate({ to: '/customers' })} title={customer.name}>"
+      }
+    >
+      <Row label="Read (default)">
+        <Button variant="secondary" onClick={() => setState('read')}>
+          Open
+        </Button>
+      </Row>
+      <Row label="Edit in place">
+        <Button variant="secondary" onClick={() => setState('edit')}>
+          Open in edit state
+        </Button>
+        <span className="text-xs text-content-muted">
+          Change the name, then press Esc: the dirty close asks.
+        </span>
+      </Row>
+      <Row label="Failed save">
+        <Button variant="secondary" onClick={() => setState('failed')}>
+          Open with a failed save
+        </Button>
+      </Row>
+
+      <DetailDialog
+        key={state ?? 'closed'}
+        customer={state ? specimenCustomers[0] : null}
+        startInEdit={state === 'edit' || state === 'failed'}
+        failed={state === 'failed'}
+        onClose={() => setState(null)}
+      />
     </Section>
   )
 }

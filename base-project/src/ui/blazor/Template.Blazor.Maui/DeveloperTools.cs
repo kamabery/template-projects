@@ -11,8 +11,8 @@ namespace Template.Blazor.Maui;
 /// MauiProgram.cs has no implementation, and the compiler erases both the method and the call.
 ///
 /// It is a separate file rather than a conditional-compilation block because this repository is
-/// template source: the scaffolding engine reads a C# preprocessor directive in a .cs file as one
-/// of its own conditionals and removes the region, whatever the symbol names. Nothing in this file
+/// packaged for scaffolding: the engine reads a C# preprocessor directive in a .cs file as one of
+/// its own conditionals and removes the region, whatever the symbol names. Nothing in this file
 /// may reintroduce one.
 /// </remarks>
 public static partial class MauiProgram

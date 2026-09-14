@@ -1,7 +1,9 @@
 using JasperFx.Events.Daemon;
 using JasperFx.Events.Projections;
 using Marten;
+using template.events.Abstractions;
 using template.events.Projections;
+using template.events.Storage;
 using Wolverine;
 using Wolverine.Marten;
 
@@ -12,17 +14,27 @@ var builder = WebApplication.CreateBuilder(args);
 // what puts the Marten and Wolverine spans under the incoming request in the dashboard's traces.
 builder.AddServiceDefaults();
 
+// WidgetsController comes from src/shared/, but that is linked source rather than a referenced
+// assembly, so it compiles into this one and AddControllers finds it by scanning the entry assembly
+// as usual. No AddApplicationPart needed - which is a second, smaller benefit of linking.
 builder.Services.AddControllers();
+
 builder.Services.AddOpenApi();
+
+// The one store-specific thing the shared controller needs. See IWidgetSummaries for why this seam
+// exists rather than the controller taking IQuerySession directly.
+builder.Services.AddScoped<IWidgetSummaries, WidgetSummaries>();
 
 // Injected rather than called statically so the handlers stay pure functions the unit tests can
 // call with a fake clock.
 builder.Services.AddSingleton(TimeProvider.System);
 
-// The event store. Always Postgres - Marten has no other backend - and deliberately a different
-// database from template.api's weatherdb, which may be SQL Server. The AppHost starts a dedicated
-// events-pg container and injects ConnectionStrings__eventstore; the fallback in
-// appsettings.Development.json is what lets `dotnet run` work standalone against a local Postgres.
+// The event store. This host is the Postgres one: Marten has no other backend, so the AppHost only
+// declares it when Database:Provider is postgres. The sqlserver and sqlite branches run the Polecat
+// and Fisher hosts instead, which are the same code against the same API from a different assembly.
+//
+// A dedicated events-pg container rather than the API's pg, so the two stores stay independent. The
+// fallback in appsettings.Development.json is what lets `dotnet run` work standalone.
 builder.Services.AddMarten(options =>
     {
         options.Connection(builder.Configuration.GetConnectionString("eventstore")!);
@@ -32,9 +44,9 @@ builder.Services.AddMarten(options =>
         options.DatabaseSchemaName = "event_store";
 
         // Async, not Inline: the daemon owns its own checkpoint, so this read model can be rebuilt
-        // independently and reports lag. The cost is eventual consistency on GET /orders/{id} -
-        // see OrderSummaryProjection for the full note and the one-line switch to Inline.
-        options.Projections.Add<OrderSummaryProjection>(ProjectionLifecycle.Async);
+        // independently and reports lag. The cost is eventual consistency on GET /widgets/{id} -
+        // see WidgetSummaryProjection for the full note and the one-line switch to Inline.
+        options.Projections.Add<WidgetSummaryProjection>(ProjectionLifecycle.Async);
 
         // Schema creation is Development-only, for the same reason template.api gates
         // InitializeDatabaseAsync: a scaffold must not deploy schema changes unreviewed. A real

@@ -1,8 +1,8 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardTitle } from '@/components/ui/card'
-import { fetchWeatherForecast } from '@/lib/api'
-import { weatherQueryKey } from '@/db/collections'
+import { fetchWidgets } from '@/lib/api'
+import { widgetsQueryKey } from '@/db/collections'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -18,9 +18,9 @@ const stack = [
 function HomePage() {
   // Plain TanStack Query — the simplest way to talk to the dotnet API.
   const health = useQuery({
-    queryKey: [...weatherQueryKey, 'health'],
-    queryFn: ({ signal }) => fetchWeatherForecast(signal),
-    select: (forecasts) => forecasts.length,
+    queryKey: [...widgetsQueryKey, 'health'],
+    queryFn: ({ signal }) => fetchWidgets(signal),
+    select: (widgets) => widgets.length,
   })
 
   return (
@@ -35,8 +35,8 @@ function HomePage() {
             template.api
           </code>{' '}
           dotnet service on the back. Open{' '}
-          <Link to="/weather" className="text-brand underline">
-            Weather
+          <Link to="/widgets" className="text-brand underline">
+            Widgets
           </Link>{' '}
           for the live call.
         </p>
@@ -46,7 +46,7 @@ function HomePage() {
         <CardTitle>API status</CardTitle>
         <p className="mt-2 text-lg">
           {health.isPending && (
-            <span className="text-content-muted">Checking /api/WeatherForecast…</span>
+            <span className="text-content-muted">Checking /api/Widgets…</span>
           )}
           {health.isError && (
             <span className="text-content-muted">
@@ -59,7 +59,7 @@ function HomePage() {
           )}
           {health.isSuccess && (
             <span>
-              Online — <strong>{health.data}</strong> forecasts returned.
+              Online — <strong>{health.data}</strong> widgets returned.
             </span>
           )}
         </p>

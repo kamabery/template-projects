@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
+  <!-- The Marten / PostgreSQL event-store host. One of three siblings - see
+       template.events.polecat (SQL Server) and template.events.fisher (SQLite) - which exist
+       separately because a project may reference exactly one event store. The store-agnostic code
+       they all share is linked in from src/shared/.
+
+       AssemblyName and RootNamespace are pinned rather than defaulted from the file name.
        Scaffolding renames files using the new project name verbatim, but rewrites file *contents*
        using the casing of the token it matched - and the prefix here is lowercase. Without these
-       two properties the assembly would take the file name's casing while every string naming it
-       took the lowercase form, which is exactly the mismatch that breaks EF's MigrationsAssembly
-       lookup and InternalsVisibleTo. The PascalCase-named projects need no such pin. -->
+       pins, assembly identity and namespace would disagree in a scaffolded project. -->
   <PropertyGroup>
     <AssemblyName>template.events</AssemblyName>
     <RootNamespace>template.events</RootNamespace>
@@ -18,7 +21,8 @@
     <PackageReference Include="WolverineFx" />
     <PackageReference Include="WolverineFx.Marten" />
     <!-- Registers the Roslyn code generator Wolverine's default TypeLoadMode.Dynamic needs; core
-         WolverineFx stopped shipping it in v6. Auto-registers on reference. -->
+         WolverineFx stopped shipping it in v6. Auto-registers on reference, so nothing in the
+         source names it - do not prune it as an unused dependency. -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="Marten" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
@@ -26,20 +30,25 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Reaches up and out of event-project/ on purpose. AddServiceDefaults()/MapDefaultEndpoints()
-         are what give this service the same OTel wiring and the /health endpoint the AppHost gates
-         on, and CLAUDE.md is explicit that template.servicedefaults is the stock Aspire file to
-         extend rather than copy.
+    <!-- src/shared/ is linked source, not a referenced assembly, and that is load-bearing.
+         JasperFx.Events emits an aggregate's Apply/Create dispatcher with a compile-time source
+         generator, and the type it emits is the store's own closed generic - so the aggregate and
+         the event store have to be in the SAME compilation. A shared class library would give the
+         generator Widget but no store, and FetchForWriting<Widget> would then throw
+         InvalidProjectionException on the first command, after a clean build and a green test run.
+         See src/shared/README.md. -->
+    <Compile Include="..\shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
 
-         The cost is that event-project/ is not independently packable while this reference exists.
-         That is the second cross-boundary reference in the workspace - the shared solution and
-         AppHost being the first - and both are billed under Templating status question 0. -->
+  <ItemGroup>
+    <!-- Reaches up and out of event-project/ on purpose: this is a sibling of base-project/, and
+         AddServiceDefaults is what supplies /health, OpenTelemetry and Serilog. Staging folds the
+         events slice into src/ and rewrites this to a normal sibling path. The cost is that
+         event-project/ is not independently packable while this reference exists. -->
     <ProjectReference Include="..\..\..\base-project\src\template.servicedefaults\template.servicedefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Top-level statements make the generated Program class internal, so the test project cannot
-         see it without this. Mirrors template.api.csproj. -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>template.events.tests</_Parameter1>
     </AssemblyAttribute>

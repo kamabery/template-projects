@@ -15,7 +15,7 @@ public static class DatabaseProvider
     public const string ConfigurationKey = "Database:Provider";
 
     /// <summary>Connection-string name, which is also the Aspire resource name.</summary>
-    public const string ConnectionName = "weatherdb";
+    public const string ConnectionName = "appdb";
 
     public const string Postgres = "postgres";
 

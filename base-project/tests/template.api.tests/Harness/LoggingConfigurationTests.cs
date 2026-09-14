@@ -18,11 +18,11 @@ namespace template.api.tests.Harness;
 [Trait(TestCategories.Category, TestCategories.Integration)]
 public sealed class LoggingConfigurationTests : IAsyncLifetime
 {
-    private WeatherApiFactory _factory = null!;
+    private ApiFactory _factory = null!;
 
     public Task InitializeAsync()
     {
-        _factory = new WeatherApiFactory();
+        _factory = new ApiFactory();
         // WebApplicationFactory builds the host lazily; CreateClient is what forces it.
         _factory.CreateClient().Dispose();
         return Task.CompletedTask;

@@ -4,7 +4,7 @@ namespace template.data.Repositories;
 /// The generic data-access contract every entity is reached through.
 /// </summary>
 /// <remarks>
-/// Only <see cref="GetAllAsync"/> has a caller today - WeatherForecastController reads and nothing
+/// Only <see cref="GetAllAsync"/> has a caller today - WidgetsController reads and nothing
 /// writes. The rest is here because a scaffold's job is to show the shape a generated project
 /// grows into, not because a use case is pending. Delete the unused half if your project never
 /// needs it.

@@ -1,0 +1,15 @@
+{
+  "openApiPath": "../../../../contracts/api.openapi.json",
+  "namespace": "Template.Blazor.Maui.Pages.Providers",
+  "outputFolder": "./Providers",
+  "outputFilename": "ApiClient.generated.cs",
+  "naming": {
+    "useOpenApiTitle": false,
+    "interfaceName": "Api"
+  },
+  "generateContracts": true,
+  "generateXmlDocCodeComments": true,
+  "returnIApiResponse": false,
+  "useCancellationTokens": true,
+  "generateDefaultAdditionalProperties": false
+}

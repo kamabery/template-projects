@@ -25,14 +25,13 @@ public static class MvvmServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddSharedViewModels(this IServiceCollection services)
     {
-        services.AddTransient<CounterViewModel>();
-        services.AddTransient<WeatherForecastViewModel>();
+        services.AddTransient<WidgetsViewModel>();
 
         return services;
     }
 
     /// <summary>
-    /// Registers the Refit clients this library's ViewModels depend on, pointed at
+    /// Registers the generated Refit client this library's ViewModels depend on, pointed at
     /// <paramref name="apiBaseAddress"/>. Each host supplies its own address: the WASM host reads it
     /// from wwwroot/appsettings.json, the MAUI host from its embedded appsettings.json.
     /// </summary>
@@ -41,7 +40,7 @@ public static class MvvmServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(apiBaseAddress);
 
         services
-            .AddRefitClient<IWeatherForecastProvider>()
+            .AddRefitClient<IApi>()
             .ConfigureHttpClient(client => client.BaseAddress = apiBaseAddress)
             .AddStandardResilienceHandler();
 

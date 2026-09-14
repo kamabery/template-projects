@@ -1,6 +1,6 @@
 @template.api_HostAddress = http://localhost:5058
 
-GET {{template.api_HostAddress}}/weatherforecast/
+GET {{template.api_HostAddress}}/widgets/
 Accept: application/json
 
 ###

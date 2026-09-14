@@ -9,7 +9,7 @@ using Template.Blazor.Maui.Tests.Infrastructure;
 namespace Template.Blazor.Maui.Tests.Stores;
 
 /// <summary>
-/// Covers the unit preference and the ViewModel property that proxies it.
+/// Covers the density preference and the ViewModel property that proxies it.
 /// </summary>
 /// <remarks>
 /// <see cref="PreferencesStore"/> is static and process-wide, so every test here restores it. That
@@ -18,71 +18,71 @@ namespace Template.Blazor.Maui.Tests.Stores;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public sealed class PreferencesStoreTests : IDisposable
 {
-    private readonly TemperatureUnit _original = PreferencesStore.Unit;
+    private readonly ViewDensity _original = PreferencesStore.Density;
 
-    public void Dispose() => PreferencesStore.Unit = _original;
+    public void Dispose() => PreferencesStore.Density = _original;
 
     [Fact]
-    public void Unit_DefaultsToCelsius()
+    public void Density_DefaultsToComfortable()
     {
-        PreferencesStore.Unit.ShouldBe(TemperatureUnit.Celsius);
+        PreferencesStore.Density.ShouldBe(ViewDensity.Comfortable);
     }
 
     [Theory, AutoNSubstituteData]
-    public void Unit_SetOnTheViewModel_WritesThroughToTheStore(
-        [Frozen] IWeatherForecastProvider provider,
-        WeatherForecastViewModel viewModel)
+    public void Density_SetOnTheViewModel_WritesThroughToTheStore(
+        [Frozen] IApi api,
+        WidgetsViewModel viewModel)
     {
-        _ = provider;
+        _ = api;
 
-        viewModel.Unit = TemperatureUnit.Fahrenheit;
+        viewModel.Density = ViewDensity.Compact;
 
-        PreferencesStore.Unit.ShouldBe(TemperatureUnit.Fahrenheit);
+        PreferencesStore.Density.ShouldBe(ViewDensity.Compact);
     }
 
     [Theory, AutoNSubstituteData]
-    public void Unit_SetOnTheViewModel_RaisesPropertyChanged(
-        [Frozen] IWeatherForecastProvider provider,
-        WeatherForecastViewModel viewModel)
+    public void Density_SetOnTheViewModel_RaisesPropertyChanged(
+        [Frozen] IApi api,
+        WidgetsViewModel viewModel)
     {
-        _ = provider;
+        _ = api;
         var raised = new List<string?>();
         viewModel.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
-        viewModel.Unit = TemperatureUnit.Fahrenheit;
+        viewModel.Density = ViewDensity.Compact;
 
-        // This is the whole re-render mechanism for the weather page: ViewModelBinder listens to
+        // This is the whole re-render mechanism for the Widgets page: ViewModelBinder listens to
         // PropertyChanged, so no StateHasChanged is needed anywhere.
-        raised.ShouldContain(nameof(WeatherForecastViewModel.Unit));
+        raised.ShouldContain(nameof(WidgetsViewModel.Density));
     }
 
     [Theory, AutoNSubstituteData]
-    public void Unit_SetToTheSameValue_RaisesNothing(
-        [Frozen] IWeatherForecastProvider provider,
-        WeatherForecastViewModel viewModel)
+    public void Density_SetToTheSameValue_RaisesNothing(
+        [Frozen] IApi api,
+        WidgetsViewModel viewModel)
     {
-        _ = provider;
-        viewModel.Unit = TemperatureUnit.Fahrenheit;
+        _ = api;
+        viewModel.Density = ViewDensity.Compact;
 
         var raised = new List<string?>();
         viewModel.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
-        viewModel.Unit = TemperatureUnit.Fahrenheit;
+        viewModel.Density = ViewDensity.Compact;
 
         raised.ShouldBeEmpty();
     }
 
     [Theory, AutoNSubstituteData]
-    public void Unit_SurvivesANewViewModel(
-        [Frozen] IWeatherForecastProvider provider,
-        WeatherForecastViewModel first,
-        WeatherForecastViewModel second)
+    public void Density_SurvivesANewViewModel(
+        [Frozen] IApi api,
+        WidgetsViewModel first,
+        WidgetsViewModel second)
     {
-        _ = provider;
+        _ = api;
 
         // ViewModels are transient, so the preference has to live in the store or it would reset
         // on every navigation.
-        first.Unit = TemperatureUnit.Fahrenheit;
+        first.Density = ViewDensity.Compact;
 
-        second.Unit.ShouldBe(TemperatureUnit.Fahrenheit);
+        second.Density.ShouldBe(ViewDensity.Compact);
     }
 }

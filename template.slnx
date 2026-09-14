@@ -31,6 +31,13 @@
     <File Path="aspire.config.json" />
   </Folder>
 
+  <!-- Terraform for Azure. Only the README is listed: IaC/ holds two dozen files whose set depends
+       on which add-ons a scaffold has, and a solution folder enumerating them would rot the first
+       time one is added. The README is the entry point worth having in the IDE. -->
+  <Folder Name="/IaC/">
+    <File Path="IaC/README.md" />
+  </Folder>
+
   <Folder Name="/src/">
     <Project Path="base-project/src/template.api/template.api.csproj" />
     <!-- The entity, DbContext, seeder and repository. Its own project so that template.api can
@@ -50,8 +57,20 @@
     <Project Path="base-project/src/template.api.migrations.sqlite/template.api.migrations.sqlite.csproj" />
     <!--#endif -->
     <Project Path="base-project/src/template.servicedefaults/template.servicedefaults.csproj" />
-    <!--#if (includeEvents) -->
+    <!--#if (includeEventsMarten) -->
+    <!-- The events slice: one host per event store, and no shared project. They are separate
+         projects rather than conditional regions in one because a project may reference exactly one
+         event store, and the code they share is LINKED source under event-project/src/shared/
+         rather than a referenced assembly - see that folder's README for why an assembly cannot
+         work. The host that runs is the one matching Database:Provider; a scaffold ships only that
+         one. -->
     <Project Path="event-project/src/template.events/template.events.csproj" />
+    <!--#endif -->
+    <!--#if (includeEventsPolecat) -->
+    <Project Path="event-project/src/template.events.polecat/template.events.polecat.csproj" />
+    <!--#endif -->
+    <!--#if (includeEventsFisher) -->
+    <Project Path="event-project/src/template.events.fisher/template.events.fisher.csproj" />
     <!--#endif -->
     <!-- <<addon-src-projects>> - scaffolding inserts add-on src projects above this line. -->
   </Folder>
@@ -80,13 +99,13 @@
     <!--#if (includeBlazorWeb || includeMaui) -->
     <Project Path="base-project/tests/Template.Blazor.Maui.Tests/Template.Blazor.Maui.Tests.csproj" />
     <!--#endif -->
-    <!--#if (includeEvents) -->
+    <!--#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher) -->
     <Project Path="event-project/tests/template.events.tests/template.events.tests.csproj" />
     <!--#endif -->
     <!-- <<addon-test-projects>> - scaffolding inserts add-on test projects above this line. -->
   </Folder>
 
-  <!--#if (includeEvents) -->
+  <!--#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher) -->
   <!-- event-project/ is a sibling of base-project/, not part of it. It joins this solution because
        the solution sits at the workspace root spanning both, but it is outside base-project/ and so
        outside that directory's pack root - which is why it carries its own Directory.Build.props

@@ -1,0 +1,47 @@
+@page "/widgets"
+@inherits ViewModelComponentBase<WidgetsViewModel>
+
+<PageTitle>Widgets</PageTitle>
+
+<h1>Widgets</h1>
+
+<FluentCard>
+    @if (ViewModel.ErrorMessage is not null)
+    {
+        @* Wrapped in an element this library owns. FluentMessageBar does not forward arbitrary
+           attributes to the DOM, so role/data-testid have to live on a real element for both
+           assistive technology and tests to find them. *@
+        <div role="alert" data-testid="error">
+            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
+                @ViewModel.ErrorMessage
+            </FluentMessageBar>
+        </div>
+    }
+
+    @* Setting ViewModel.Density raises PropertyChanged, which is what re-renders this page - there
+       is no StateHasChanged here for the same reason there is none anywhere else. *@
+    <div class="density-toggle" data-testid="density-toggle" role="group" aria-label="Density">
+        @foreach (var density in Densities)
+        {
+            <FluentButton Appearance="@(ViewModel.Density == density ? Appearance.Accent : Appearance.Neutral)"
+                          aria-pressed="@(ViewModel.Density == density)"
+                          OnClick="@(() => ViewModel.Density = density)">
+                @density
+            </FluentButton>
+        }
+    </div>
+
+    <WidgetTable Widgets="@ViewModel.Widgets"
+                 IsLoading="@ViewModel.IsLoading"
+                 Density="@ViewModel.Density" />
+
+    <FluentDivider />
+
+    <FluentButton OnClick="@(() => ViewModel.LoadCommand.ExecuteAsync(null))" Disabled="@ViewModel.IsLoading">
+        Reload
+    </FluentButton>
+</FluentCard>
+
+@code {
+    private static readonly ViewDensity[] Densities = [ViewDensity.Comfortable, ViewDensity.Compact];
+}

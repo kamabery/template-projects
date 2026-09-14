@@ -1,0 +1,68 @@
+@* Presentational only: it renders what it is given and owns no state. All state lives in the
+   ViewModel, which is what lets this component be tested without DI or HTTP - including the
+   density, which arrives as a parameter rather than being read from PreferencesStore here.
+
+   A plain <table> rather than FluentDataGrid on purpose. FluentDataGrid ships a JS module, and
+   under bUnit's loose JSInterop an imported module resolves to null, so the component throws the
+   moment it calls into it. See the note in Layout/NavMenu.razor. *@
+
+@if (IsLoading)
+{
+    <div class="list-loading" data-testid="loading">
+        <FluentProgressRing />
+        <span>Loading widgets...</span>
+    </div>
+}
+else if (Widgets.Count == 0)
+{
+    <p data-testid="empty">No widgets yet.</p>
+}
+else
+{
+    <table class="data-table @DensityClass" data-testid="widget-table">
+        <thead>
+            <tr>
+                <th scope="col">Name</th>
+                <th scope="col" class="numeric">Quantity</th>
+                @if (Density == ViewDensity.Comfortable)
+                {
+                    <th scope="col">Updated</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var widget in Widgets)
+            {
+                <tr class="data-row" @key="widget.Id">
+                    <td>
+                        @widget.Name
+                        @if (widget.IsLowStock)
+                        {
+                            @* Not colour alone: the badge carries its own text, so the warning
+                               survives a monochrome display and a screen reader. *@
+                            <span class="badge-warning">Low stock</span>
+                        }
+                    </td>
+                    <td class="numeric">@widget.Quantity</td>
+                    @if (Density == ViewDensity.Comfortable)
+                    {
+                        <td>@widget.UpdatedOn.ToString("d")</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Widget> Widgets { get; set; } = [];
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public ViewDensity Density { get; set; } = ViewDensity.Comfortable;
+
+    private string DensityClass => Density == ViewDensity.Compact ? "is-compact" : string.Empty;
+}

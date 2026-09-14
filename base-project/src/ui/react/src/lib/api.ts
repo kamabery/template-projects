@@ -3,19 +3,15 @@
  *
  * Requests go to `/api/*` and are proxied to the API by Vite in dev
  * (see vite.config.ts), so the browser stays same-origin.
+ *
+ * The types are not written here — they are generated from
+ * `contracts/api.openapi.json`, which the API's own test suite produces. Run
+ * `npm run api:types` after changing an endpoint. See docs/ADDING-A-RESOURCE.md.
  */
+import type { components } from './api.generated'
 
-/** Mirrors template.data/WeatherForecast.cs. */
-export interface WeatherForecast {
-  /** The database key. Present on the wire, but nothing here reads it: rows are keyed by `date`
-   *  in the TanStack DB collection (see db/collections.ts). */
-  id: number
-  /** ISO date, e.g. "2026-08-10" — serialized from DateOnly. */
-  date: string
-  temperatureC: number
-  temperatureF: number
-  summary: string | null
-}
+/** Generated from the API's OpenAPI document — do not hand-edit the shape. */
+export type Widget = components['schemas']['Widget']
 
 const API_BASE = '/api'
 
@@ -34,8 +30,6 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T
 }
 
-export function fetchWeatherForecast(
-  signal?: AbortSignal,
-): Promise<Array<WeatherForecast>> {
-  return getJson<Array<WeatherForecast>>('/WeatherForecast', signal)
+export function fetchWidgets(signal?: AbortSignal): Promise<Array<Widget>> {
+  return getJson<Array<Widget>>('/Widgets', signal)
 }

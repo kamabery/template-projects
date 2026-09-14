@@ -37,11 +37,14 @@ if (-not $OutputRoot) { $OutputRoot = Join-Path $RepoRoot 'artifacts/templates' 
 
 # Build output and package caches must never reach a template. node_modules in particular would add
 # tens of thousands of files to the nupkg.
-$SkipDirs = @('bin', 'obj', 'node_modules', 'dist', 'dev-dist', '.tanstack', '.vite', '.git', 'artifacts')
+$SkipDirs = @('bin', 'obj', 'node_modules', 'dist', 'dev-dist', '.tanstack', '.vite', '.git', 'artifacts', '.terraform')
 
 # Local run artifacts that are not source. The sqlite branch writes its store beside the built API,
 # and a developer who ran the API before packing would otherwise ship their data in the template.
-$SkipFilePatterns = @('weather.db', 'weather.db-shm', 'weather.db-wal', '*.user', '*.suo')
+# Terraform state is added for a second reason on top of "not source": it holds the database
+# password Terraform generated.
+$SkipFilePatterns = @('app.db', 'app.db-shm', 'app.db-wal', '*.user', '*.suo',
+                      '*.tfstate', '*.tfstate.*', '*.tfplan')
 
 function Get-StageableFiles {
     param([Parameter(Mandatory)][string] $Root)
@@ -204,6 +207,169 @@ function Remove-FalseRegions {
     [IO.File]::WriteAllLines($Path, $collapsed)
 }
 
+function Copy-IacFiles {
+    <#
+        The Terraform configuration is the one part of this workspace an add-on contributes to
+        without a merge step: Terraform loads every *.tf in a directory, so an add-on simply drops
+        its own file in beside the base's. That is why there is no <<addon->> marker for any of
+        this, and why the wiring files have almost nothing to say about it.
+
+        IaC/ lives at the workspace root rather than under base-project/ because it spans both
+        base-project/ and event-project/. It is staged explicitly here, the same way template.slnx
+        and .aspire/ are.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [Parameter(Mandatory)][string[]] $Files
+    )
+
+    $source = Join-Path $RepoRoot 'IaC'
+    foreach ($rel in $Files) {
+        $from = Join-Path $source $rel
+        if (-not (Test-Path -LiteralPath $from)) { throw "Missing IaC file: $from" }
+
+        $to = Join-Path $Root (Join-Path 'IaC' $rel)
+        $toDir = Split-Path -Parent $to
+        if (-not (Test-Path -LiteralPath $toDir)) { New-Item -ItemType Directory -Path $toDir -Force | Out-Null }
+        Copy-Item -LiteralPath $from -Destination $to -Force
+    }
+}
+
+function Assert-TerraformSubstitutionSafe {
+    <#
+        sourceName is the bare word this workspace prefixes its projects with, and dotnet new
+        rewrites it in file *contents* as well as file names. azurerm_container_app declares a block
+        whose name is exactly that word, so any .tf file containing one must be listed as copyOnly in
+        its template.json - substitution would rename the block and the configuration would stop
+        parsing.
+
+        Every other .tf file must therefore not contain the token at all. Checking it here means a
+        stray mention in a comment fails the build rather than producing a scaffold that does not
+        plan.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [string[]] $CopyOnly = @()
+    )
+
+    $iac = Join-Path $Root 'IaC'
+    if (-not (Test-Path -LiteralPath $iac)) { return }
+
+    $token = 'temp' + 'late'   # split so this check does not trip over its own source
+    foreach ($file in Get-ChildItem -LiteralPath $iac -Recurse -File -Filter *.tf) {
+        $rel = [IO.Path]::GetRelativePath($Root, $file.FullName).Replace('\', '/')
+        if ($CopyOnly -contains $rel) { continue }
+
+        $pattern = '\b' + $token + '\b'
+        if ([IO.File]::ReadAllText($file.FullName) -match $pattern) {
+            throw @"
+$rel contains the bare sourceName token and is not listed as copyOnly.
+  Either reword it, or add it to the copyOnly list in this template's template.json AND to the
+  list passed to Assert-TerraformSubstitutionSafe in stage.ps1.
+"@
+        }
+    }
+}
+
+function Assert-ResourceTokenSafe {
+    <#
+        The resource parameter substitutes the bare words Widget and widget in file contents and
+        file names, exactly as sourceName does for the project prefix. That is only safe where the
+        token means the sample resource and nothing else.
+
+        Two kinds of file are dangerous. A copyOnly file is not substituted at all, so a Widget in
+        one would ship verbatim into a scaffold that asked for Product. And package-lock.json,
+        already copyOnly for the @babel/template reason, must not grow a dependency whose name
+        contains the token either.
+
+        Checking it here means a stray mention fails the build rather than producing a scaffold
+        that half-renames.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [string[]] $CopyOnly = @()
+    )
+
+    if ($CopyOnly.Count -eq 0) { return }
+
+    $token = 'Wid' + 'get'   # split so this check does not trip over its own source
+    foreach ($rel in $CopyOnly) {
+        $path = Join-Path $Root $rel
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+
+        if ([IO.File]::ReadAllText($path) -match ('(?i)' + $token + '')) {
+            throw @"
+$rel is copyOnly and contains the resource token, which is never substituted there.
+  Reword it, or drop the file from the copyOnly list in this template's template.json.
+"@
+        }
+    }
+}
+
+function Assert-ProseSubstitutionSafe {
+    <#
+        sourceName substitution is a plain substring rewrite rather than a word-boundary one, and it
+        runs over prose as readily as over code. Every occurrence of the token in a staged file is
+        rewritten, including the ones meant as English rather than as a project name: "templating",
+        the HCL function whose name ends in "file()", and "a starter template" all reach a scaffold
+        with the project's own name spliced into the middle of the word.
+
+        The mirror image is just as quiet. The three lowercase-prefixed templates do not substitute a
+        PascalCase occurrence at all, so one that names a project ships verbatim and points at an
+        assembly the scaffold never had. That is the gap the nameBlazorProject symbol closes, and
+        this is what stops the next one being written.
+
+        The token is legitimate only immediately before a name this workspace gives a project, a
+        solution or the React app. Anywhere else it is one of those two bugs. .tf files are left to
+        Assert-TerraformSubstitutionSafe, which holds them to the stricter rule of no token at all,
+        and .tfvars is skipped because the bare token there IS the value being substituted.
+    #>
+    param(
+        [Parameter(Mandatory)][string] $Root,
+        [string[]] $CopyOnly = @()
+    )
+
+    $token      = 'temp' + 'late'   # split so this check does not trip over its own source
+    $allowed    = "^$token\.(api|data|servicedefaults|events|slnx|ui|blazor)"
+    $configDir  = ".$token.config/"
+    $extensions = @(
+        '.md', '.cs', '.razor', '.ts', '.tsx', '.css', '.html',
+        '.json', '.props', '.csproj', '.slnx', '.yml', '.http'
+    )
+
+    $findings = @()
+
+    foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -File) {
+        if ($extensions -notcontains $file.Extension) { continue }
+
+        $rel = [IO.Path]::GetRelativePath($Root, $file.FullName).Replace('\', '/')
+        if ($CopyOnly -contains $rel) { continue }
+        if ($rel.StartsWith($configDir)) { continue }
+
+        $number = 0
+        foreach ($line in [IO.File]::ReadAllLines($file.FullName)) {
+            $number++
+            foreach ($hit in [regex]::Matches($line, $token, 'IgnoreCase')) {
+                if ($line.Substring($hit.Index) -match $allowed) { continue }
+
+                $from    = [Math]::Max(0, $hit.Index - 30)
+                $length  = [Math]::Min($line.Length - $from, 70)
+                $findings += "  ${rel}:${number}  ...$($line.Substring($from, $length).Trim())..."
+            }
+        }
+    }
+
+    if ($findings.Count -gt 0) {
+        throw @"
+$($findings.Count) occurrence(s) of the bare sourceName token outside a project name:
+$($findings -join "`n")
+  Substitution rewrites each of these, so the word reaches a scaffold with the project's name
+  spliced into it. Reword so the token does not appear - refer to the thing indirectly if you
+  have to, the way IaC/README.md now describes the HCL function it must not name.
+"@
+    }
+}
+
 function Add-TemplateConfig {
     param(
         [Parameter(Mandatory)][string] $Name,
@@ -217,13 +383,32 @@ function Add-TemplateConfig {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
     Copy-Item -LiteralPath $src -Destination (Join-Path $dir 'template.json') -Force
 
-    # The wiring instructions an add-on template hands to the scaffolding skill.
-    $wiring = Join-Path $PSScriptRoot "wiring/$Name.wiring.md"
-    if (Test-Path -LiteralPath $wiring) {
+    # The wiring instructions an add-on template hands to the scaffolding skill. A template may ship
+    # more than one - aspire-events has a variant per event store - in which case its template.json
+    # excludes the ones that do not apply, so exactly one reaches a scaffold's .scaffold/.
+    $wiringFiles = @(Get-ChildItem -Path (Join-Path $PSScriptRoot 'wiring') -Filter "$Name*.wiring.md" -File -ErrorAction SilentlyContinue)
+    if ($wiringFiles.Count -gt 0) {
         $scaffoldDir = Join-Path $Root '.scaffold'
         New-Item -ItemType Directory -Path $scaffoldDir -Force | Out-Null
-        Copy-Item -LiteralPath $wiring -Destination (Join-Path $scaffoldDir "$Name.wiring.md") -Force
+        foreach ($file in $wiringFiles) {
+            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $scaffoldDir $file.Name) -Force
+        }
     }
+}
+
+function Add-DesignDoc {
+    # docs/DESIGN.md owns the design rules for this workspace AND for every scaffold made from it, so
+    # a UI template that did not carry it would hand someone a style guide with no statement of what
+    # it is for. It lands at the scaffold's own docs/DESIGN.md, where CLAUDE.md's links resolve.
+    # Unlike the wiring files this is not optional: throw rather than stage a UI with no doctrine.
+    param([Parameter(Mandatory)][string] $Root)
+
+    $src = Join-Path $RepoRoot 'docs/DESIGN.md'
+    if (-not (Test-Path -LiteralPath $src)) { throw "Missing docs/DESIGN.md at $src" }
+
+    $dir = Join-Path $Root 'docs'
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    Copy-Item -LiteralPath $src -Destination (Join-Path $dir 'DESIGN.md') -Force
 }
 
 # --------------------------------------------------------------------------------------------------
@@ -263,18 +448,35 @@ Edit-StagedFile -Path (Join-Path $base '.aspire/apphost.cs') -Pairs @(
 )
 
 # React, Blazor and events are separate templates; their regions can never be true here.
-$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEvents')
+$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEventsMarten', 'includeEventsPolecat', 'includeEventsFisher')
 foreach ($rel in @('template.slnx', '.aspire/apphost.cs', '.aspire/appsettings.json')) {
     Remove-FalseRegions -Path (Join-Path $base $rel) -FalseSymbols $falseForBase
 }
 
+# The Terraform configuration, minus the four files the add-ons own. Nothing rewrites paths here:
+# every path inside IaC/ is already relative to the scaffold root.
+$n += Copy-Tree -From (Join-Path $RepoRoot 'IaC') -To (Join-Path $base 'IaC') -ExcludePrefixes @(
+    'frontend.react.tf',
+    'frontend.blazor-web.tf',
+    'containerapp.events.tf',
+    'servicebus.tf'
+)
+Assert-TerraformSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
+Assert-ResourceTokenSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
+
 Add-TemplateConfig -Name 'aspire-base' -Root $base
+Assert-ProseSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 Write-Host "aspire-base       $n files"
 
 # --- aspire-ui-react ------------------------------------------------------------------------------
 $react = Join-Path $OutputRoot 'aspire-ui-react'
 $n = Copy-Tree -From (Join-Path $baseProject 'src/ui/react') -To (Join-Path $react 'src/ui/react')
+Copy-IacFiles -Root $react -Files @('frontend.react.tf')
+Assert-TerraformSubstitutionSafe -Root $react
+Assert-ResourceTokenSafe -Root $react -CopyOnly @('src/ui/react/package-lock.json')
 Add-TemplateConfig -Name 'aspire-ui-react' -Root $react
+Add-DesignDoc -Root $react
+Assert-ProseSubstitutionSafe -Root $react -CopyOnly @('src/ui/react/package-lock.json')
 Write-Host "aspire-ui-react   $n files"
 
 # --- aspire-ui-blazor -----------------------------------------------------------------------------
@@ -283,23 +485,55 @@ $blazor = Join-Path $OutputRoot 'aspire-ui-blazor'
 $n = Copy-Tree -From (Join-Path $baseProject 'src/ui/blazor') -To (Join-Path $blazor 'src/ui/blazor')
 $n += Copy-Tree -From (Join-Path $baseProject 'tests/Template.Blazor.Maui.Tests') `
                 -To (Join-Path $blazor 'tests/Template.Blazor.Maui.Tests')
+# Only the WebAssembly host is a deployable web front end; template.json drops this file when
+# --web false. The MAUI host provisions nothing at all - it is a client, not a workload.
+Copy-IacFiles -Root $blazor -Files @('frontend.blazor-web.tf')
+$blazorCopyOnly = @('src/ui/blazor/Template.Blazor.Maui.Pages/wwwroot/app.css')
+Assert-TerraformSubstitutionSafe -Root $blazor
+Assert-ResourceTokenSafe -Root $blazor -CopyOnly $blazorCopyOnly
 Add-TemplateConfig -Name 'aspire-ui-blazor' -Root $blazor
+Add-DesignDoc -Root $blazor
+Assert-ProseSubstitutionSafe -Root $blazor -CopyOnly $blazorCopyOnly
 Write-Host "aspire-ui-blazor  $n files"
 
 # --- aspire-events --------------------------------------------------------------------------------
 # Folded into src/ and tests/ rather than kept as a sibling directory. That is what retires the
 # cross-boundary ProjectReference: servicedefaults becomes a normal sibling one level up.
 # event-project's own Directory.Build.props and Directory.Packages.props are deliberately not copied
-# - a scaffold has one of each at its root, and the wiring step adds the Wolverine/Marten versions.
+# - a scaffold has one of each at its root, and the wiring step adds the event store's versions.
+#
+# All three hosts are staged and template.json prunes two of them; src/shared/ always survives and
+# is LINKED into whichever host remains rather than being a project of its own. They cannot be one
+# project with conditional regions, because a project may reference exactly one event store -
+# JasperFx.Events ships a source generator that emits a type per projection, so two stores in one
+# project fail to compile. And the shared half cannot be its own assembly either, because that same
+# generator has to see the aggregate and the store in one compilation; see src/shared/README.md.
 $events = Join-Path $OutputRoot 'aspire-events'
-$n = Copy-Tree -From (Join-Path $eventProject 'src/template.events') -To (Join-Path $events 'src/template.events')
+$eventHosts = @('shared', 'template.events', 'template.events.polecat', 'template.events.fisher')
+
+$n = 0
+foreach ($project in $eventHosts) {
+    $n += Copy-Tree -From (Join-Path $eventProject "src/$project") -To (Join-Path $events "src/$project")
+}
 $n += Copy-Tree -From (Join-Path $eventProject 'tests/template.events.tests') `
                 -To (Join-Path $events 'tests/template.events.tests')
 
-Edit-StagedFile -Path (Join-Path $events 'src/template.events/template.events.csproj') -Pairs @(
-    '..\..\..\base-project\src\template.servicedefaults\', '..\template.servicedefaults\'
-)
+# The one path the flattening invalidates, in each host that carries it. The shared domain project
+# has no reference to base-project/, so it is deliberately absent from this list.
+foreach ($project in @('template.events', 'template.events.polecat', 'template.events.fisher')) {
+    Edit-StagedFile -Path (Join-Path $events "src/$project/$project.csproj") -Pairs @(
+        '..\..\..\base-project\src\template.servicedefaults\', '..\template.servicedefaults\'
+    )
+}
+
+# Both files ship on every event store. servicebus.tf is idle unless the store is Polecat - only
+# that host reads Events:Transport - and says so in its own header.
+Copy-IacFiles -Root $events -Files @('containerapp.events.tf', 'servicebus.tf')
+Assert-TerraformSubstitutionSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
+Assert-ResourceTokenSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
+
 Add-TemplateConfig -Name 'aspire-events' -Root $events
+Assert-ProseSubstitutionSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 Write-Host "aspire-events     $n files"
 
 Write-Host ""

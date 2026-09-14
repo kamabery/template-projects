@@ -72,8 +72,7 @@ function RootLayout() {
               <NavItem to="/" exact>
                 Home
               </NavItem>
-              <NavItem to="/counter">Counter</NavItem>
-              <NavItem to="/weather">Weather</NavItem>
+              <NavItem to="/widgets">Widgets</NavItem>
               <NavItem to="/styleguide">Style guide</NavItem>
             </NavBar>
 

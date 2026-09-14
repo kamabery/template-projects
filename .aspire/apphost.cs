@@ -2,11 +2,16 @@
 //#if (includeReact)
 #:package Aspire.Hosting.JavaScript@13.5.1
 //#endif
-//#if (dbProvider == "postgres" || includeEvents)
+//#if (dbProvider == "postgres" || includeEventsMarten)
 #:package Aspire.Hosting.PostgreSQL@13.5.1
 //#endif
-//#if (dbProvider == "sqlserver")
+//#if (dbProvider == "sqlserver" || includeEventsPolecat)
 #:package Aspire.Hosting.SqlServer@13.5.1
+//#endif
+//#if (includeEventsPolecat)
+// Only the Polecat events host can ask for a broker, and only when Events:Transport says so. The
+// package is still needed unconditionally there, because both transport branches are live code.
+#:package Aspire.Hosting.Azure.ServiceBus@13.5.1
 //#endif
 // <<addon-packages>> - scaffolding inserts add-on #:package directives above this line.
 #:property AspireUseCliBundle=true
@@ -28,7 +33,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 // store that starts and the EF provider that talks to it cannot disagree. The dbProvider
 // scaffolding parameter collapses this to whichever single branch was asked for.
 //
-// WithDataVolume on the container branches: rows survive `aspire stop`, which is why WeatherSeeder
+// WithDataVolume on the container branches: rows survive `aspire stop`, which is why WidgetSeeder
 // checks staleness rather than emptiness. Drop the volume to start clean.
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "postgres";
 
@@ -39,15 +44,23 @@ var databaseProvider = builder.Configuration["Database:Provider"] ?? "postgres";
 // Each branch carries both a runtime guard and a scaffolding conditional. In this workspace all of
 // them are present and Database:Provider picks between them at run time; in a scaffold only the
 // provider that was asked for survives, and the guard it keeps is simply always true.
-IResourceBuilder<IResourceWithConnectionString>? weatherdb = null;
+IResourceBuilder<IResourceWithConnectionString>? appdb = null;
 
 //#if (dbProvider == "postgres")
 if (databaseProvider.Equals("postgres", StringComparison.OrdinalIgnoreCase))
 {
-    weatherdb = builder.AddPostgres("pg")
+    appdb = builder.AddPostgres("pg")
                        .WithDataVolume()
-                       .AddDatabase("weatherdb");
+                       .AddDatabase("appdb");
 }
+//#endif
+
+//#if (dbProvider == "sqlserver" || includeEventsPolecat)
+// A second slot, holding the SQL Server itself rather than a database on it. The events slice adds
+// its event store as another database on this same server, so it needs the server and appdb
+// above is only a database. Nothing else uses it, and the Postgres and SQLite branches leave it
+// null.
+IResourceBuilder<SqlServerServerResource>? sqlServer = null;
 //#endif
 
 //#if (dbProvider == "sqlserver")
@@ -55,10 +68,18 @@ if (databaseProvider.Equals("sqlserver", StringComparison.OrdinalIgnoreCase))
 {
     // The image is Developer edition by default; MSSQL_PID picks Express, which is what the
     // licence-free path for a scaffolded project looks like.
-    weatherdb = builder.AddSqlServer("sql")
+    //
+    // 2025-latest rather than the default 2022, and pinned rather than floating: Polecat stores
+    // events and documents in SQL Server 2025's native json column type and generates JSON_OBJECT
+    // and GENERATE_SERIES, none of which exist in 2022. The API itself does not care, but the two
+    // share this server, so the version has to satisfy the stricter of them. Azure SQL Database has
+    // the native json type GA, so the deployed path needs nothing extra.
+    sqlServer = builder.AddSqlServer("sql")
+                       .WithImageTag("2025-latest")
                        .WithEnvironment("MSSQL_PID", "Express")
-                       .WithDataVolume()
-                       .AddDatabase("weatherdb");
+                       .WithDataVolume();
+
+    appdb = sqlServer.AddDatabase("appdb");
 }
 //#endif
 
@@ -92,19 +113,19 @@ var api = builder.AddCSharpApp("api", "../base-project/src/template.api/template
         url.Url = "/api-docs";
     });
 
-if (weatherdb is not null)
+if (appdb is not null)
 {
     // WithReference here, unlike blazor-web below, because the API is a .NET process that reads
-    // ConnectionStrings:weatherdb straight out of its configuration. WaitFor is not optional: the
+    // ConnectionStrings:appdb straight out of its configuration. WaitFor is not optional: the
     // API migrates and seeds at startup, so racing the container throws rather than retrying.
-    api.WithReference(weatherdb).WaitFor(weatherdb);
+    api.WithReference(appdb).WaitFor(appdb);
 }
 else
 {
     // The sqlite branch. Same configuration key the container branches populate via WithReference,
     // set by hand because there is no resource to reference. Relative to the API's working
     // directory, so the file lands beside the built API rather than anywhere absolute.
-    api.WithEnvironment("ConnectionStrings__weatherdb", "Data Source=weather.db");
+    api.WithEnvironment("ConnectionStrings__appdb", "Data Source=app.db");
 }
 
 // <<addon-resources>> - scaffolding inserts add-on resource declarations below this line.
@@ -145,24 +166,34 @@ builder.AddCSharpApp("maui", "../base-project/src/ui/blazor/Template.Blazor.Maui
     .WithExplicitStart();
 //#endif
 
-//#if (includeEvents)
-// The optional Wolverine/Marten slice, behind Events:Enabled. Read the same way Database:Provider
-// is above, and with the same intent: one configuration value decides the shape of the run, in one
+//#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher)
+// The optional event-sourcing slice, behind Events:Enabled. Read the same way Database:Provider is
+// above, and with the same intent: one configuration value decides the shape of the run, in one
 // place.
 //
-// The flag gates the AppHost only. Nothing inside template.events reads it - when the flag is off
-// neither the service nor its container is declared, so there is nothing running to gate. That is
+// Which event store runs is deliberately NOT a second choice - it follows Database:Provider.
+// Marten on Postgres, Polecat on SQL Server, Fisher on SQLite: the same slice, the same handler
+// code, three assemblies, because each of those libraries declares its own IDocumentSession,
+// SingleStreamProjection and [AggregateHandler]. Each branch below therefore guards on the
+// provider as well as the flag, so exactly one of them can declare the "events" resource in this
+// workspace; a scaffold ships only the host matching the provider it asked for.
+//
+// The flag gates the AppHost only. Nothing inside the events service reads it - when the flag is
+// off neither the service nor its store is declared, so there is nothing running to gate. That is
 // why this is a plain configuration read rather than Microsoft.FeatureManagement.
 // bool.TryParse rather than Configuration.GetValue<bool>: GetValue is an extension method from
 // Microsoft.Extensions.Configuration.Binder, and a file-based AppHost has only what its `#:package`
 // directives pull in - which does not include it. The raw indexer is also how Database:Provider is
 // read above, so this stays consistent with it.
-if (bool.TryParse(builder.Configuration["Events:Enabled"], out var eventsEnabled) && eventsEnabled)
+var eventsEnabled = bool.TryParse(builder.Configuration["Events:Enabled"], out var eventsFlag) && eventsFlag;
+//#endif
+
+//#if (includeEventsMarten)
+if (eventsEnabled && databaseProvider.Equals("postgres", StringComparison.OrdinalIgnoreCase))
 {
-    // Its own container, and always Postgres, even when Database:Provider says sqlserver above.
-    // Marten has no other backend, so binding the event store to that choice would break the
-    // sqlserver and sqlite branches outright. A separate container keeps the two stores
-    // independent instead.
+    // Its own container, unlike the SQL Server branch below, even though Marten and the API's store
+    // are the same engine here. This is the proven path and leaving it exactly as it was is worth
+    // more than symmetry with that branch; the two stores also stay independent this way.
     var eventstore = builder.AddPostgres("events-pg")
                             .WithDataVolume()
                             .AddDatabase("eventstore");
@@ -174,6 +205,80 @@ if (bool.TryParse(builder.Configuration["Events:Enabled"], out var eventsEnabled
         // Marten applies its schema at startup in Development.
         .WithReference(eventstore)
         .WaitFor(eventstore)
+        .WithHttpHealthCheck("/health")
+        .WithExternalHttpEndpoints()
+        .WithUrlForEndpoint("http", url =>
+        {
+            url.DisplayText = "Events API docs";
+            url.Url = "/api-docs";
+        });
+}
+//#endif
+
+//#if (includeEventsPolecat)
+if (eventsEnabled
+    && databaseProvider.Equals("sqlserver", StringComparison.OrdinalIgnoreCase)
+    && sqlServer is not null)
+{
+    // A second database on the API's SQL Server rather than a container of its own. Polecat is
+    // Marten's API on SQL Server, so unlike the Postgres branch there is no engine mismatch to work
+    // around - the two stores are already isolated by database, and a second SQL Server container
+    // plus the Service Bus emulator's own companion would be three engines on one machine.
+    var eventstore = sqlServer.AddDatabase("eventstore");
+
+    // "local" by default: Wolverine's durable local queues are backed by the same SQL Server outbox
+    // tables, so the whole outbox path is exercised with no broker and no extra container.
+    // "azureservicebus" is the Azure-shaped path and costs two more containers.
+    var eventsTransport = builder.Configuration["Events:Transport"] ?? "local";
+
+    var events = builder.AddCSharpApp("events",
+                                      "../event-project/src/template.events.polecat/template.events.polecat.csproj",
+                                      options => options.LaunchProfileName = "http")
+        .WithReference(eventstore)
+        .WaitFor(eventstore)
+        // Forwarded so the service and this file cannot disagree about the transport, exactly as
+        // Database__Provider is forwarded to the API above.
+        .WithEnvironment("Events__Transport", eventsTransport)
+        .WithHttpHealthCheck("/health")
+        .WithExternalHttpEndpoints()
+        .WithUrlForEndpoint("http", url =>
+        {
+            url.DisplayText = "Events API docs";
+            url.Url = "/api-docs";
+        });
+
+    if (eventsTransport.Equals("azureservicebus", StringComparison.OrdinalIgnoreCase))
+    {
+        // The emulator, so this runs with no Azure subscription. It is not free: the image requires
+        // accepting a EULA and starts its own companion SQL Server, which is why this is opt-in
+        // rather than the default for the sqlserver branch.
+        //
+        // The AMQP port is pinned because Wolverine's UseAzureServiceBusEmulator() addresses the
+        // emulator at its well-known ports rather than through service discovery. It also needs the
+        // management endpoint on 5300; if that turns out not to be reachable, the fallback is to
+        // drop AutoProvision() in the events service and rely on the queue declared just below,
+        // which Aspire writes into the emulator's own configuration.
+        var serviceBus = builder.AddAzureServiceBus("servicebus")
+            .RunAsEmulator(emulator => emulator.WithHostPort(5672));
+
+        serviceBus.AddServiceBusQueue("widget-completed");
+
+        events.WithReference(serviceBus).WaitFor(serviceBus);
+    }
+}
+//#endif
+
+//#if (includeEventsFisher)
+if (eventsEnabled && databaseProvider.Equals("sqlite", StringComparison.OrdinalIgnoreCase))
+{
+    // No store resource at all, which is the entire point of this branch: choosing SQLite means
+    // `aspire run` needs no Docker, and turning events on must not quietly take that away. The
+    // connection string is set by hand for the same reason the API's is above - there is no
+    // resource to reference - and is relative, so the file lands beside the built service.
+    builder.AddCSharpApp("events",
+                         "../event-project/src/template.events.fisher/template.events.fisher.csproj",
+                         options => options.LaunchProfileName = "http")
+        .WithEnvironment("ConnectionStrings__eventstore", "Data Source=eventstore.db")
         .WithHttpHealthCheck("/health")
         .WithExternalHttpEndpoints()
         .WithUrlForEndpoint("http", url =>

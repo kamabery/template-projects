@@ -1,3 +1,4 @@
+using Microsoft.OpenApi;
 using template.api.Services;
 using template.api.Startup;
 
@@ -12,7 +13,13 @@ builder.AddServiceDefaults();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// The transformer is not cosmetic - it is what makes the generated clients usable. The .NET
+// generator describes an int32 as `"type": ["integer", "string"]`, which is legal JSON Schema
+// (a number is allowed to arrive as a string) and which every downstream generator honours, so
+// `Widget.Id` would reach TypeScript as `number | string`. Emitting 3.0 instead is worse, not
+// better: the downgrade drops the union and leaves the property with no type at all.
+// contracts/api.openapi.json is generated from this document, so this shapes both front ends.
+builder.Services.AddOpenApi(options => options.AddSchemaTransformer(NumericUnionTransformer.Collapse));
 
 // For the Blazor WebAssembly host only - see CorsConfigurator for why the other two clients
 // need nothing.
@@ -60,7 +67,7 @@ app.MapControllers();
 // /health and /alive, used by the AppHost to gate dependent resources.
 app.MapDefaultEndpoints();
 
-// Applies migrations and seeds the forecast, in Development only. Awaited before Run so the API
+// Applies migrations and seeds the sample rows, in Development only. Awaited before Run so the API
 // never serves a request against a schema that is not there yet.
 await app.InitializeDatabaseAsync();
 

@@ -52,10 +52,10 @@ public sealed class NavigationTelemetryTests : IDisposable
         using var telemetry = new NavigationTelemetry(_navigation);
         telemetry.Start();
 
-        _navigation.NavigateTo("weather");
+        _navigation.NavigateTo("widgets");
 
         _activities.Count.ShouldBe(2);
-        _activities[1].GetTagItem("url.path").ShouldBe("weather");
+        _activities[1].GetTagItem("url.path").ShouldBe("widgets");
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class NavigationTelemetryTests : IDisposable
         telemetry.Start();
         telemetry.Dispose();
 
-        _navigation.NavigateTo("weather");
+        _navigation.NavigateTo("widgets");
 
         _activities.ShouldHaveSingleItem();
     }
@@ -80,7 +80,7 @@ public sealed class NavigationTelemetryTests : IDisposable
         telemetry.Start();
         telemetry.Start();
 
-        _navigation.NavigateTo("counter");
+        _navigation.NavigateTo("styleguide");
 
         _activities.Count.ShouldBe(2);
     }

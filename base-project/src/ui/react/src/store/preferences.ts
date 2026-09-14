@@ -1,12 +1,16 @@
 import { Store, useStore } from '@tanstack/react-store'
 
-export type TemperatureUnit = 'C' | 'F'
+/**
+ * How much room a list gives each row. Client-only: the server has no opinion,
+ * and no page is required to honour it - /widgets does.
+ */
+export type Density = 'comfortable' | 'compact'
 
 /** `system` follows the OS setting; the other two override it. */
 export type Theme = 'system' | 'light' | 'dark'
 
 interface PreferencesState {
-  unit: TemperatureUnit
+  density: Density
   theme: Theme
 }
 
@@ -15,16 +19,16 @@ interface PreferencesState {
  * store for things the API does not own.
  */
 export const preferencesStore = new Store<PreferencesState>({
-  unit: 'C',
+  density: 'comfortable',
   theme: 'system',
 })
 
-export function setUnit(unit: TemperatureUnit) {
-  preferencesStore.setState((state) => ({ ...state, unit }))
+export function setDensity(density: Density) {
+  preferencesStore.setState((state) => ({ ...state, density }))
 }
 
-export function useUnit(): TemperatureUnit {
-  return useStore(preferencesStore, (state) => state.unit)
+export function useDensity(): Density {
+  return useStore(preferencesStore, (state) => state.density)
 }
 
 export function setTheme(theme: Theme) {

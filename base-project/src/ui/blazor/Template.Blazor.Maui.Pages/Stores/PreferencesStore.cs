@@ -12,20 +12,20 @@ namespace Template.Blazor.Maui.Pages.Stores;
 /// </remarks>
 public static class PreferencesStore
 {
-    private static TemperatureUnit _unit = TemperatureUnit.Celsius;
+    private static ViewDensity _density = ViewDensity.Comfortable;
 
-    public static TemperatureUnit Unit
+    public static ViewDensity Density
     {
-        get => _unit;
+        get => _density;
         set
         {
-            if (_unit == value)
+            if (_density == value)
             {
                 return;
             }
 
-            _unit = value;
-            WeakReferenceMessenger.Default.Send(new UnitChangedMessage(value));
+            _density = value;
+            WeakReferenceMessenger.Default.Send(new DensityChangedMessage(value));
         }
     }
 }

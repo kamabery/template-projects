@@ -42,6 +42,8 @@ public sealed class ClientTelemetryController(IConfiguration configuration, IHos
 
     [HttpGet("config", Name = "GetClientTelemetryConfig")]
     [EndpointSummary("OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard")]
+    [ProducesResponseType<ClientTelemetryConfig>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<ClientTelemetryConfig> GetConfig()
     {
         if (!environment.IsDevelopment())

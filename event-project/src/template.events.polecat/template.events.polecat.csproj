@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The Polecat / SQL Server event-store host, used when Database:Provider is sqlserver.
+
+       Polecat is Marten's API on SQL Server 2025, so this project is the same code as
+       template.events against the same shape of API from a different assembly. It is a separate
+       project rather than a conditional region because a project may reference exactly one event
+       store - see Directory.Packages.props for why.
+
+       AssemblyName and RootNamespace are pinned for the same casing reason as every other
+       lowercase-named project here. Staging renames the assembly to template.events; the namespace
+       is already template.events and never moves. -->
+  <PropertyGroup>
+    <AssemblyName>template.events.polecat</AssemblyName>
+    <RootNamespace>template.events</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.Polecat" />
+    <!-- Registers the Roslyn code generator Wolverine's default TypeLoadMode.Dynamic needs; core
+         WolverineFx stopped shipping it in v6. Auto-registers on reference, so nothing in the
+         source names it - do not prune it as an unused dependency. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <!-- The optional transport. Referenced unconditionally because both branches of
+         Events:Transport are live code; it costs nothing until the configuration selects it. -->
+    <PackageReference Include="WolverineFx.AzureServiceBus" />
+    <PackageReference Include="Polecat" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- src/shared/ is linked source, not a referenced assembly, and that is load-bearing.
+         JasperFx.Events emits an aggregate's Apply/Create dispatcher with a compile-time source
+         generator, and the type it emits is the store's own closed generic - so the aggregate and
+         the event store have to be in the SAME compilation. A shared class library would give the
+         generator Widget but no store, and FetchForWriting<Widget> would then throw
+         InvalidProjectionException on the first command, after a clean build and a green test run.
+         See src/shared/README.md. -->
+    <Compile Include="..\shared\**\*.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reaches up and out of event-project/ on purpose: this is a sibling of base-project/, and
+         AddServiceDefaults is what supplies /health, OpenTelemetry and Serilog. Staging folds the
+         events slice into src/ and rewrites this to a normal sibling path. -->
+    <ProjectReference Include="..\..\..\base-project\src\template.servicedefaults\template.servicedefaults.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -41,13 +41,12 @@ src/
   routes/           file-based routes — the file path IS the URL
     __root.tsx      layout, nav, devtools, router context type
     index.tsx       home; plain useQuery against the API
-    counter.tsx     store-to-render check; no HTTP, no config, no services
-    weather.tsx     forecast grid; useLiveQuery against the DB collection
+    widgets.tsx     the sample resource; useLiveQuery against the DB collection
   db/collections.ts TanStack DB collections
   store/            TanStack Store — client-only UI state
-    preferences.ts  temperature unit + theme (writes <html data-theme>)
-    counter.ts      the /counter count
-  lib/api.ts        typed fetch wrappers for template.api
+    preferences.ts  list density + theme (writes <html data-theme>)
+  lib/api.ts        fetch wrappers for template.api; types re-exported, not written
+  lib/api.generated.ts  generated from contracts/api.openapi.json — do not edit
   lib/query-client.ts  the shared QueryClient
   components/ui/    the design system - one file per approved component
   components/styleguide/  chrome for the /styleguide page; not for product screens
@@ -64,12 +63,12 @@ a `to=` prop is a compile error.
 **Query** — one `QueryClient` in `src/lib/query-client.ts`, shared by hooks and
 collections. `src/routes/index.tsx` shows the direct `useQuery` form.
 
-**DB** — `weatherCollection` wraps the same query in a live collection.
+**DB** — `widgetsCollection` wraps the same query in a live collection.
 Components read it with `useLiveQuery`, which re-runs incrementally on change
 rather than re-filtering the whole array each render, and `getKey` lets rows
 update in place across refetches.
 
-**Store** — `preferencesStore` holds the °C/°F toggle. Use it for state the
+**Store** — `preferencesStore` holds the list-density toggle. Use it for state the
 server does not own; anything that comes from the API belongs in Query or DB.
 
 ## Design system
@@ -133,10 +132,28 @@ FluentUI's own variables. **Adding a token here means adding it there.**
 
 ## Adding an endpoint
 
-1. Add a typed fetch function to `src/lib/api.ts`.
+**The types are not written here.** `src/lib/api.generated.ts` is generated from
+`contracts/api.openapi.json`, which the API's own test suite produces, so the
+contract has exactly one definition and this app re-exports it:
+
+```ts
+export type Widget = components['schemas']['Widget']
+```
+
+After changing an endpoint, regenerate — `npm run api:types`. The full loop,
+including how the contract file itself is rewritten, is in
+[`docs/ADDING-A-RESOURCE.md`](../../../docs/ADDING-A-RESOURCE.md). On this side:
+
+1. Re-export the generated type in `src/lib/api.ts` and add a fetch function
+   beside it. Keep the `/api` prefix — Vite proxies it, which is what keeps the
+   browser same-origin with the API.
 2. For one-off reads, call it from a route with `useQuery`.
 3. For data several components share or mutate, add a collection in
    `src/db/collections.ts` and read it with `useLiveQuery`.
+
+`npm run api:types` is deliberately **not** part of `npm run build`: the
+generated file is committed so this app builds with no API, no database and no
+.NET SDK present.
 
 ## After adding a route
 
@@ -148,8 +165,8 @@ brand-new file under `src/routes/` will fail `npm run typecheck` — and therefo
 ## Progressive web app
 
 Configured by `vite-plugin-pwa` in `vite.config.ts`. Installable, with an offline
-app shell; API responses are never cached, so offline `/weather` shows its error
-state while `/counter` keeps working.
+app shell; API responses are never cached, so offline `/widgets` shows its error
+state while `/` and `/styleguide` keep working.
 
 `registerType: 'autoUpdate'` plus `injectRegister: 'auto'` means the plugin
 injects the registration script into `index.html` — **`src/main.tsx` contains no

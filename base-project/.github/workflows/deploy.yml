@@ -1,0 +1,248 @@
+# Build, migrate, provision, publish.
+#
+# One job rather than four, because every step after the first needs a `terraform output` from the
+# step before it, and passing those between jobs would mean serialising them through artifacts for
+# no gain.
+#
+# The steps guard themselves on what this project actually contains - hashFiles for the React and
+# Blazor front ends, a glob for the events service - so the same file works whether or not those
+# were scaffolded. Nothing here needs editing when one is added later.
+#
+# Authentication is OIDC. Three repository secrets, no passwords:
+#   AZURE_CLIENT_ID         app registration with a federated credential for this repository
+#   AZURE_TENANT_ID
+#   AZURE_SUBSCRIPTION_ID
+# That app registration needs Contributor *and* User Access Administrator on the subscription - the
+# second because Terraform creates role assignments, which Contributor alone cannot do.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which envs/*.tfvars to apply
+        type: string
+        default: dev
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  # Terraform state does not tolerate two applies at once, and local state cannot even lock.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_ENV: ${{ inputs.environment || 'dev' }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+          terraform_wrapper: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: terraform init
+        working-directory: IaC
+        run: terraform init
+
+      # The registry and the database first, on their own. The images cannot be built before the
+      # registry exists and the schema cannot be applied before the database does - but the
+      # container apps must not be created until there is an image for them to pull. -target is the
+      # right tool for exactly this ordering problem and for nothing else.
+      - name: terraform apply (registry and database)
+        working-directory: IaC
+        run: |
+          terraform apply -auto-approve \
+            -var-file="envs/${TF_ENV}.tfvars" \
+            -target=azurerm_container_registry.main \
+            -target=module.database
+
+      - name: read outputs
+        working-directory: IaC
+        run: |
+          {
+            echo "ACR_NAME=$(terraform output -raw acr_name)"
+            echo "RG_NAME=$(terraform output -raw resource_group_name)"
+            echo "KV_NAME=$(terraform output -raw key_vault_name)"
+            echo "DB_PROVIDER=$(terraform output -raw database_provider)"
+            echo "DB_SERVER=$(terraform output -raw database_server_name 2>/dev/null || true)"
+            echo "DB_STORAGE=$(terraform output -raw database_storage_account_name 2>/dev/null || true)"
+          } >> "$GITHUB_ENV"
+
+      - name: build and push images
+        run: |
+          set -euo pipefail
+          api_project=$(ls -d src/*.api | head -1)
+          project_name=$(basename "$api_project" .api)
+
+          az acr build --registry "$ACR_NAME" \
+            --image "${project_name}-api:${IMAGE_TAG}" \
+            --file "${api_project}/Dockerfile" .
+
+          # One events host at most, and only if this project has the slice at all.
+          events_project=$(ls -d src/*.events* 2>/dev/null | grep -v ".tests" | head -1 || true)
+          if [ -n "$events_project" ]; then
+            az acr build --registry "$ACR_NAME" \
+              --image "${project_name}-events:${IMAGE_TAG}" \
+              --file "${events_project}/Dockerfile" .
+          fi
+
+      # The runner is not an Azure resource, so the database's AllowAzureServices rule does not
+      # cover it. Opened here and closed unconditionally at the end - leaving it open would hand
+      # every future workflow run a standing hole.
+      - name: open the database firewall for this runner
+        if: env.DB_PROVIDER != 'sqlite'
+        run: |
+          set -euo pipefail
+          runner_ip=$(curl -fsS https://api.ipify.org)
+          echo "RUNNER_IP=$runner_ip" >> "$GITHUB_ENV"
+          case "$DB_PROVIDER" in
+            postgres)
+              az postgres flexible-server firewall-rule create \
+                --resource-group "$RG_NAME" --name "$DB_SERVER" --rule-name gha-runner \
+                --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
+            sqlserver)
+              az sql server firewall-rule create \
+                --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner \
+                --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
+          esac
+
+      # Migrations are Development-only inside the application, deliberately: a deployment must not
+      # apply an unreviewed schema change, and concurrent replicas would race. This is the step that
+      # replaces InitializeDatabaseAsync.
+      - name: apply the schema
+        if: env.DB_PROVIDER != 'sqlite'
+        run: |
+          set -euo pipefail
+          dotnet tool install --global dotnet-ef --version "10.*" \
+            || dotnet tool update --global dotnet-ef --version "10.*"
+          conn=$(az keyvault secret show --vault-name "$KV_NAME" \
+                   --name appdb-connection --query value -o tsv)
+          dotnet ef database update \
+            --project "$(ls -d src/*.api.migrations.* | head -1)" \
+            --startup-project "$(ls -d src/*.api | head -1)" \
+            --connection "$conn"
+
+      # SQLite has no server to connect to: the file lives on the Azure Files share the API mounts.
+      # So the schema is built here and the file uploaded - once. Uploading again would overwrite
+      # whatever the running service has written since, which is why this is guarded on absence
+      # rather than run every time. A later schema change on this branch is a manual operation, and
+      # that is one of the costs of choosing SQLite.
+      - name: seed the SQLite file if the share is empty
+        if: env.DB_PROVIDER == 'sqlite'
+        run: |
+          set -euo pipefail
+          exists=$(az storage file exists --account-name "$DB_STORAGE" --share-name data \
+                     --path app.db --auth-mode login --query exists -o tsv)
+          if [ "$exists" = "true" ]; then
+            echo "app.db is already on the share; leaving it alone."
+            exit 0
+          fi
+          dotnet tool install --global dotnet-ef --version "10.*" \
+            || dotnet tool update --global dotnet-ef --version "10.*"
+          dotnet ef database update \
+            --project "$(ls -d src/*.api.migrations.* | head -1)" \
+            --startup-project "$(ls -d src/*.api | head -1)" \
+            --connection "Data Source=$PWD/app.db"
+          az storage file upload --account-name "$DB_STORAGE" --share-name data \
+            --source "$PWD/app.db" --path app.db --auth-mode login
+
+      - name: terraform apply
+        working-directory: IaC
+        run: |
+          terraform apply -auto-approve \
+            -var-file="envs/${TF_ENV}.tfvars" \
+            -var="image_tag=${IMAGE_TAG}"
+
+      # The Blazor WebAssembly host is genuinely cross-origin, and its Static Web App's hostname
+      # does not exist until the apply above has run. containerapp.api.tf is part of the base
+      # scaffold and cannot reference a resource declared in an add-on file, so this second pass is
+      # what puts the origin into the API's Cors:AllowedOrigins. Without it the page loads and every
+      # request fails in the browser while the API logs healthy 200s.
+      - name: terraform apply (Blazor CORS origin)
+        working-directory: IaC
+        run: |
+          set -euo pipefail
+          blazor_url=$(terraform output -raw blazor_web_url 2>/dev/null || true)
+          if [ -z "$blazor_url" ]; then
+            echo "No Blazor WebAssembly front end in this project; nothing to allow."
+            exit 0
+          fi
+          terraform apply -auto-approve \
+            -var-file="envs/${TF_ENV}.tfvars" \
+            -var="image_tag=${IMAGE_TAG}" \
+            -var="cors_allowed_origins=[\"${blazor_url}\"]"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: publish the React front end
+        if: hashFiles('src/ui/react/package.json') != ''
+        working-directory: IaC
+        run: |
+          set -euo pipefail
+          npm --prefix ../src/ui/react ci
+          npm --prefix ../src/ui/react run build
+          npm install -g @azure/static-web-apps-cli
+          swa deploy ../src/ui/react/dist \
+            --deployment-token "$(terraform output -raw react_api_key)" \
+            --env production
+
+      # ApiBaseAddress is a static file the browser fetches, not configuration the platform can
+      # inject, and it ships pointing at http://localhost:5058. Rewriting it here is the only thing
+      # that makes the deployed WebAssembly host talk to the deployed API.
+      - name: publish the Blazor WebAssembly front end
+        if: hashFiles('src/ui/blazor/*.Blazor.Maui.Web/*.csproj') != ''
+        working-directory: IaC
+        run: |
+          set -euo pipefail
+          api_url=$(terraform output -raw api_url)
+          host_project=$(ls -d ../src/ui/blazor/*.Blazor.Maui.Web | head -1)
+
+          tmp=$(mktemp)
+          jq --arg url "$api_url" '.ApiBaseAddress = $url' \
+            "${host_project}/wwwroot/appsettings.json" > "$tmp"
+          mv "$tmp" "${host_project}/wwwroot/appsettings.json"
+
+          dotnet publish "$host_project" -c Release -o "$RUNNER_TEMP/blazor"
+          npm install -g @azure/static-web-apps-cli
+          swa deploy "$RUNNER_TEMP/blazor/wwwroot" \
+            --deployment-token "$(terraform output -raw blazor_web_api_key)" \
+            --env production
+
+      - name: close the database firewall
+        if: always() && env.DB_PROVIDER != 'sqlite' && env.RUNNER_IP != ''
+        run: |
+          case "$DB_PROVIDER" in
+            postgres)
+              az postgres flexible-server firewall-rule delete --yes \
+                --resource-group "$RG_NAME" --name "$DB_SERVER" --rule-name gha-runner || true ;;
+            sqlserver)
+              az sql server firewall-rule delete \
+                --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner || true ;;
+          esac

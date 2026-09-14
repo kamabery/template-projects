@@ -20,6 +20,26 @@
     "type": "solution"
   },
   "symbols": {
+    "resource": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Resource name",
+      "description": "The singular PascalCase name of the sample resource, e.g. Product. The scaffold's entity, controller, page and tests are named from it. The plural is this plus \"s\" - an irregular plural is a rename after scaffolding, not a second parameter. Pass the SAME value to every template in a scaffold, exactly like -n.",
+      "defaultValue": "Widget",
+      "replaces": "Widget",
+      "fileRename": "Widget"
+    },
+    "resourceLower": {
+      "//": "The lowercase form, for TypeScript identifiers, route paths and file names. A separate symbol because `replaces` is a literal substitution - unlike sourceName, it does not match case variants.",
+      "type": "generated",
+      "generator": "casing",
+      "replaces": "widget",
+      "fileRename": "widget",
+      "parameters": {
+        "source": "resource",
+        "toLower": true
+      }
+    },
     "dbProvider": {
       "type": "parameter",
       "datatype": "choice",
@@ -90,6 +110,30 @@
         ]
       }
     },
+    "dbProviderModule": {
+      "//": "IaC/database.tf calls one module, and this is the single line that differs between the three providers. The module directories that were not chosen are excluded below, so a scaffold carries only the one it uses - exactly as it carries only one migrations project.",
+      "type": "generated",
+      "generator": "switch",
+      "replaces": "./modules/database-postgres",
+      "parameters": {
+        "evaluator": "C++",
+        "datatype": "string",
+        "cases": [
+          {
+            "condition": "(dbProvider == 'sqlserver')",
+            "value": "./modules/database-sqlserver"
+          },
+          {
+            "condition": "(dbProvider == 'sqlite')",
+            "value": "./modules/database-sqlite"
+          },
+          {
+            "condition": "",
+            "value": "./modules/database-postgres"
+          }
+        ]
+      }
+    },
     "dbProviderFallback": {
       "type": "generated",
       "generator": "switch",
@@ -128,6 +172,25 @@
         "toLower": true
       },
       "fileRename": "template"
+    },
+    "nameBlazorProject": {
+      "//": "This template's sourceName is the lowercase `template` and the engine matches it case-sensitively, so the PascalCase `Template.Blazor.*` project names that appear in this template's comments and docs are not substituted by it - they would reach a scaffold naming a project that does not exist. The Blazor add-on builds those names from its own sourceName, `Template`, so this keeps the base's references to them in step. Two details are load-bearing: the match is scoped to `Template.Blazor` rather than the bare word, because `Template` alone would also rewrite unrelated PascalCase uses; and the value has to carry the `.Blazor` suffix, because `replaces` swaps the whole matched string for it - a bare name would collapse `Template.Blazor.Maui.Pages` to `<Name>.Maui.Pages`.",
+      "type": "generated",
+      "generator": "join",
+      "replaces": "Template.Blazor",
+      "parameters": {
+        "separator": "",
+        "symbols": [
+          {
+            "type": "ref",
+            "value": "name"
+          },
+          {
+            "type": "const",
+            "value": ".Blazor"
+          }
+        ]
+      }
     }
   },
   "sources": [
@@ -136,21 +199,30 @@
       "target": "./",
       "modifiers": [
         {
+          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local - so copying it byte for byte costs nothing. stage.ps1 enforces that no other .tf file contains the token.",
+          "copyOnly": [
+            "IaC/containerapp.api.tf"
+          ]
+        },
+        {
           "condition": "(dbProvider != 'postgres')",
           "exclude": [
-            "src/template.api.migrations.postgres/**"
+            "src/template.api.migrations.postgres/**",
+            "IaC/modules/database-postgres/**"
           ]
         },
         {
           "condition": "(dbProvider != 'sqlserver')",
           "exclude": [
-            "src/template.api.migrations.sqlserver/**"
+            "src/template.api.migrations.sqlserver/**",
+            "IaC/modules/database-sqlserver/**"
           ]
         },
         {
           "condition": "(dbProvider != 'sqlite')",
           "exclude": [
-            "src/template.api.migrations.sqlite/**"
+            "src/template.api.migrations.sqlite/**",
+            "IaC/modules/database-sqlite/**"
           ]
         }
       ]

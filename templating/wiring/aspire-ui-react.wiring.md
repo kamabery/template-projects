@@ -47,6 +47,20 @@ ui.PublishAsStaticWebsite("/api", api);
 
 ---
 
+## 4. `IaC/` — nothing to merge
+
+`IaC/frontend.react.tf` was added by this add-on and Terraform loads every `*.tf` in that directory,
+so it is already wired. Two things it does that are worth knowing:
+
+- The Static Web App is **Standard**, not Free, because only Standard can link a backend. The link
+  points at the API container app, which puts the API on the same origin as the SPA at `/api` -
+  exactly what Vite's proxy does in development and what `PublishAsStaticWebsite("/api", api)` does
+  on an Aspire publish. So the deployed React app needs **no** CORS entry either.
+- A container app can be the linked backend of exactly one static web app. That limit never bites
+  here, because a scaffold has one front end and this is it.
+
+---
+
 ## Verify
 
 ```bash

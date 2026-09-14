@@ -220,7 +220,7 @@
 
         <StyleGuideSection Title="Alert"
                            Intent="A message about the screen the user is on. For something transient and non-blocking, use a Toast. FluentMessageBar, with MessageIntent carrying the intent."
-                           Accessibility="FluentMessageBar does not forward arbitrary attributes to the DOM, so role and data-testid have to live on an element this library owns - see Pages/WeatherForecasts.razor for the same wrapper."
+                           Accessibility="FluentMessageBar does not forward arbitrary attributes to the DOM, so role and data-testid have to live on an element this library owns - see Pages/Widgets.razor for the same wrapper."
                            Code="@Snippet10">
             <StyleGuideRow Label="Intents">
                 <div style="display:flex; flex-direction:column; gap:.75rem; width:100%;">
@@ -260,15 +260,15 @@
 
         <StyleGuideSection Title="Loading indicator"
                            Intent="Work is in progress and the user must wait. If the shape of what is coming is known, a Skeleton says more."
-                           Accessibility="The ring alone says nothing, so pair it with visible text - the weather page does exactly this."
+                           Accessibility="The ring alone says nothing, so pair it with visible text - the Widgets page does exactly this."
                            Code="@Snippet12">
             <StyleGuideRow Label="Ring">
                 <FluentProgressRing />
             </StyleGuideRow>
             <StyleGuideRow Label="With label">
-                <div class="forecast-loading">
+                <div class="list-loading">
                     <FluentProgressRing />
-                    <span>Loading the forecast...</span>
+                    <span>Loading widgets...</span>
                 </div>
             </StyleGuideRow>
         </StyleGuideSection>
@@ -330,7 +330,7 @@
             <StyleGuideRow Label="Default">
                 <FluentBreadcrumb>
                     <FluentBreadcrumbItem Href="/">Home</FluentBreadcrumbItem>
-                    <FluentBreadcrumbItem Href="/weather">Weather</FluentBreadcrumbItem>
+                    <FluentBreadcrumbItem Href="/widgets">Widgets</FluentBreadcrumbItem>
                     <FluentBreadcrumbItem>Style guide</FluentBreadcrumbItem>
                 </FluentBreadcrumb>
             </StyleGuideRow>
@@ -344,8 +344,7 @@
                 <nav class="nav-menu" aria-label="Style guide example">
                     <FluentStack Orientation="Orientation.Vertical" VerticalGap="4">
                         <NavLink class="nav-item" href="" Match="NavLinkMatch.All">Home</NavLink>
-                        <NavLink class="nav-item" href="counter">Counter</NavLink>
-                        <NavLink class="nav-item" href="weather">Weather</NavLink>
+                        <NavLink class="nav-item" href="widgets">Widgets</NavLink>
                     </FluentStack>
                 </nav>
             </StyleGuideRow>
@@ -356,7 +355,7 @@
                            Accessibility="Header cells carry scope=col. Numeric columns get tabular figures so digits line up."
                            Code="@Snippet18">
             <StyleGuideRow Label="Default">
-                <table class="forecast-table" data-testid="styleguide-table">
+                <table class="data-table" data-testid="styleguide-table">
                     <thead>
                         <tr>
                             <th scope="col">Region</th>
@@ -481,6 +480,203 @@
             </StyleGuideRow>
         </StyleGuideSection>
     </section>
+
+    <section>
+        <h2 class="sg-group-title">Page composition</h2>
+
+        @* The three page archetypes from docs/DESIGN.md section 4. Every specimen here holds its
+           open row in a field of this page, because the guide is one route and cannot navigate.
+           A product screen must put it in the URL instead - the snippet under each section shows
+           that form. Copying the specimen rather than the snippet is the mistake to avoid. *@
+
+        <StyleGuideSection Title="Dashboard home"
+                           Intent="The home route, and the only screen that is one. It answers what the state of the data is right now: every entity the application owns has a tile and a panel here. A welcome message, a stack list or a description of the application is a README that got rendered - put that in README.md, not on /."
+                           Accessibility="A tile is a link, so middle-click and open-in-new-tab work and the keyboard reaches it for free. Its accessible name says what it counts - '12 customers suspended', not '12'. Each panel is its own labelled region with its own aria-busy, so one slow query neither blocks nor silences the rest of the page."
+                           Code="@Snippet23">
+            <StyleGuideRow Label="Stat tiles">
+                <div class="stat-tiles">
+                    @foreach (var tile in DashboardTiles)
+                    {
+                        <a class="stat-tile" href="widgets" aria-label="@tile.Name">
+                            <span class="stat-tile-label">@tile.Label</span>
+                            <span class="stat-tile-value">@tile.Value</span>
+                            <span class="stat-tile-qualifier">@tile.Qualifier</span>
+                        </a>
+                    }
+                </div>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="Entity panel">
+                <section class="panel" aria-label="Recently active customers">
+                    <header class="panel-header">
+                        <h4>Recently active customers</h4>
+                        <a href="widgets">View all</a>
+                    </header>
+                    <div class="panel-body">
+                        <ul class="panel-list">
+                            @foreach (var customer in SpecimenCustomers)
+                            {
+                                <li>
+                                    <span>@customer.Name</span>
+                                    <span class="numeric">
+                                        @customer.Orders
+                                        @if (customer.Status == "Suspended")
+                                        {
+                                            <span class="badge-warning">Suspended</span>
+                                        }
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </section>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="Loading">
+                <section class="panel" aria-label="Recently active customers" aria-busy="true">
+                    <header class="panel-header">
+                        <h4>Recently active customers</h4>
+                        <a href="widgets">View all</a>
+                    </header>
+                    <div class="panel-body">
+                        <FluentSkeleton Width="100%" Height="1rem" Shape="SkeletonShape.Rect" />
+                        <FluentSkeleton Width="80%" Height="1rem" Shape="SkeletonShape.Rect" />
+                        <FluentSkeleton Width="60%" Height="1rem" Shape="SkeletonShape.Rect" />
+                    </div>
+                </section>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="Failed">
+                <section class="panel" aria-label="Orders awaiting dispatch">
+                    <header class="panel-header">
+                        <h4>Orders awaiting dispatch</h4>
+                        <a href="widgets">View all</a>
+                    </header>
+                    <div class="panel-body">
+                        @* The failure sits inside the panel that owns the query. The rest of the
+                           dashboard stays usable, which is the point of per-panel loading. *@
+                        <div role="alert">
+                            <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false" Title="Could not load orders">
+                                The API returned 500.
+                            </FluentMessageBar>
+                        </div>
+                    </div>
+                </section>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="First run">
+                <section class="panel" aria-label="Customers">
+                    <header class="panel-header">
+                        <h4>Customers</h4>
+                        <a href="widgets">View all</a>
+                    </header>
+                    <div class="panel-body">
+                        <p>No customers yet. Add the first one and it appears here and on the list.</p>
+                        <FluentButton Appearance="Appearance.Accent">Add a customer</FluentButton>
+                    </div>
+                </section>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="List with modal detail"
+                           Intent="A list route, whose rows open the detail in front of it. The list keeps its scroll position, its filters, its sort and its density; a detail page throws all of that away and offers the back button as the apology. In a product screen the open row is a query parameter on the list route, so refresh, deep link, share and Back all work - this specimen uses a field of the page because the guide cannot route."
+                           Accessibility="The row is one real control: a button carrying the row's identity as its name, stretched over the row by an ::after overlay, so the whole row is the hit target while Enter and Space still work. A trailing action sits above that overlay and is a separately named control. Closing returns focus to the row that opened it."
+                           Code="@Snippet24">
+            <StyleGuideRow Label="Default">
+                <table class="data-table" data-testid="composition-list">
+                    <caption class="sr-only">Customers</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Region</th>
+                            <th scope="col" class="numeric">Orders</th>
+                            <th scope="col"><span class="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in SpecimenCustomers)
+                        {
+                            <tr class="data-row is-interactive @(OpenCustomerId == customer.Id ? "is-open" : null)" @key="customer.Id">
+                                <td>
+                                    <button type="button"
+                                            class="row-trigger"
+                                            data-testid="row-trigger"
+                                            @onclick="@(() => OpenDetailAsync(customer))">
+                                        @customer.Name
+                                    </button>
+                                </td>
+                                <td>@customer.Region</td>
+                                <td class="numeric">@customer.Orders</td>
+                                <td class="numeric">
+                                    <span class="row-action">
+                                        <FluentButton Appearance="Appearance.Stealth">Archive</FluentButton>
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="Loading">
+                @* Skeleton rows, not a centred spinner: the header and the column widths survive,
+                   so nothing reflows when the data lands. *@
+                <table class="data-table">
+                    <caption class="sr-only">Customers, loading</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Region</th>
+                            <th scope="col" class="numeric">Orders</th>
+                        </tr>
+                    </thead>
+                    <tbody aria-busy="true">
+                        @for (var row = 0; row < 3; row++)
+                        {
+                            <tr class="data-row">
+                                <td><FluentSkeleton Width="8rem" Height="1rem" Shape="SkeletonShape.Rect" /></td>
+                                <td><FluentSkeleton Width="6rem" Height="1rem" Shape="SkeletonShape.Rect" /></td>
+                                <td class="numeric"><FluentSkeleton Width="2.5rem" Height="1rem" Shape="SkeletonShape.Rect" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </StyleGuideRow>
+
+            <StyleGuideRow Label="Empty">
+                <p>No customers match this filter. Clear it, or add the first customer.</p>
+                <FluentButton Appearance="Appearance.Neutral">Clear filters</FluentButton>
+                <FluentButton Appearance="Appearance.Accent">Add a customer</FluentButton>
+            </StyleGuideRow>
+        </StyleGuideSection>
+
+        <StyleGuideSection Title="Detail modal anatomy"
+                           Intent="Header, body, footer. The header is the entity's identity and its status, never the word 'Details'. The body is read-first - label and value pairs, not a form until the user asks for one - and it opens with what the row already knew rather than waiting on a fetch. The footer holds at most one primary action, and Close is not one of them."
+                           Accessibility="The dialog's accessible name is the entity's identity, so a screen reader announces which record opened. FluentDialog traps focus and closes on Escape; the one exception is a dirty edit, which asks before discarding. The discard and delete confirmations are the only things allowed to stack on a detail modal."
+                           Code="@Snippet25">
+            <StyleGuideRow Label="Read (default)">
+                <FluentButton Appearance="Appearance.Neutral"
+                              OnClick="@(() => OpenDetailAsync(SpecimenCustomers[0]))"
+                              data-testid="open-detail">
+                    Open
+                </FluentButton>
+                <span data-testid="detail-result">@DetailResult</span>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Edit in place">
+                <FluentButton Appearance="Appearance.Neutral"
+                              OnClick="@(() => OpenDetailAsync(SpecimenCustomers[0], startInEdit: true))">
+                    Open in edit state
+                </FluentButton>
+                <span>Change the name, then press Escape: the dirty close asks.</span>
+            </StyleGuideRow>
+            <StyleGuideRow Label="Failed save">
+                <FluentButton Appearance="Appearance.Neutral"
+                              OnClick="@(() => OpenDetailAsync(SpecimenCustomers[0], showSaveFailure: true))">
+                    Open with a failed save
+                </FluentButton>
+            </StyleGuideRow>
+        </StyleGuideSection>
+    </section>
 </div>
 
 @code {
@@ -502,12 +698,15 @@
     private const string Snippet14 = "ToastService.ShowSuccess(\"Customer saved.\");";
     private const string Snippet15 = "<FluentTabs><FluentTab Label=\"Details\">...</FluentTab></FluentTabs>";
     private const string Snippet16 = "<FluentBreadcrumb><FluentBreadcrumbItem Href=\"/\">Home</FluentBreadcrumbItem></FluentBreadcrumb>";
-    private const string Snippet17 = "<NavLink class=\"nav-item\" href=\"weather\">Weather</NavLink>";
-    private const string Snippet18 = "<table class=\"forecast-table\">...</table>";
+    private const string Snippet17 = "<NavLink class=\"nav-item\" href=\"widgets\">Widgets</NavLink>";
+    private const string Snippet18 = "<table class=\"data-table\">...</table>";
     private const string Snippet19 = "await DialogService.ShowConfirmationAsync(\"Message\", \"Yes\", \"No\", \"Title\");";
     private const string Snippet20 = "<AppField Label=\"Email\" Required=\"true\" Error=\"@EmailError\">\n    <FluentTextField Id=\"@context.ControlId\" aria-describedby=\"@context.DescribedBy\" @bind-Value=\"LiveEmail\" />\n</AppField>";
     private const string Snippet21 = "<EditForm Model=\"this\" OnSubmit=\"Search\">...</EditForm>";
     private const string Snippet22 = "var result = await DialogService.ShowConfirmationAsync(message, \"Delete\", \"Cancel\", title);\nif (!(await result.Result).Cancelled) { ... }";
+    private const string Snippet23 = "<a class=\"stat-tile\" href=\"customers?status=suspended\" aria-label=\"12 customers suspended\">";
+    private const string Snippet24 = "// the open row is the URL, not a field\nNavigation.NavigateTo(Navigation.GetUriWithQueryParameter(\"id\", customer.Id));\n\n[SupplyParameterFromQuery] public string? Id { get; set; }";
+    private const string Snippet25 = "await DialogService.ShowDialogAsync<StyleGuideDetailDialog>(\n    new StyleGuideDetailRequest(customer),\n    new DialogParameters { Title = customer.Name });";
 
     private const string LiveEmailDescription = "Type something without an @ to see the message.";
     private static readonly string[] SurfaceTokens =
@@ -564,6 +763,31 @@
     private string? DialogResult { get; set; }
     private bool CustomerDeleted { get; set; }
 
+    // Page composition specimens. See docs/DESIGN.md section 4; the React guide poses the same
+    // three sections over the same fabricated customers.
+    private static readonly StyleGuideCustomer[] SpecimenCustomers =
+    [
+        new("ada", "Ada Lovelace", "Europe", 128, "4 Sep 2026", "Active", "Grace Hopper"),
+        new("alan", "Alan Turing", "Europe", 94, "2 Sep 2026", "Active", "Grace Hopper"),
+        new("katherine", "Katherine Johnson", "North America", 12, "17 Aug 2026", "Suspended", "Jean Bartik")
+    ];
+
+    private static readonly (string Label, string Value, string Qualifier, string Name)[] DashboardTiles =
+    [
+        ("Customers", "234", "18 added this week", "234 customers, 18 added this week"),
+        ("Suspended", "12", "Needs review", "12 customers suspended, needs review"),
+        ("Orders today", "41", "9 awaiting dispatch", "41 orders today, 9 awaiting dispatch")
+    ];
+
+    /// <summary>
+    /// Which row the detail modal is open over. A field here ONLY because the guide is a single
+    /// route: on a product screen this is a query parameter, so refresh, deep link, share and the
+    /// back button all work. See Snippet24.
+    /// </summary>
+    private string? OpenCustomerId { get; set; }
+
+    private string? DetailResult { get; set; }
+
     private async Task ShowInfoDialogAsync()
     {
         var dialog = await DialogService.ShowConfirmationAsync(
@@ -575,6 +799,25 @@
         var result = await dialog.Result;
 
         DialogResult = result.Cancelled ? "Cancelled" : "Saved";
+    }
+
+    private async Task OpenDetailAsync(
+        StyleGuideCustomer customer,
+        bool startInEdit = false,
+        bool showSaveFailure = false)
+    {
+        // The row stays marked while the modal is up, so closing lands the eye where the click
+        // started - the visual half of "focus returns to the row that opened it".
+        OpenCustomerId = customer.Id;
+
+        var dialog = await DialogService.ShowDialogAsync<StyleGuideDetailDialog>(
+            new StyleGuideDetailRequest(customer, startInEdit, showSaveFailure),
+            new DialogParameters { Title = customer.Name });
+
+        var result = await dialog.Result;
+
+        DetailResult = result.Cancelled ? "Closed" : "Saved";
+        OpenCustomerId = null;
     }
 
     private async Task ConfirmDeleteAsync()
