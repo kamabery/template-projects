@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The widget-completed consumer: an Azure Functions isolated worker on a Service Bus trigger.
+
+       Deployed to Flex Consumption (IaC/functions.tf), where target-based scaling adds instances as
+       the queue grows and removes them all when it is empty. That is the point of it being a
+       Function rather than a Wolverine listener inside the events service: the events service has a
+       projection daemon and an outbox to keep alive, so it never scales to zero, and the consumer
+       should not have to share its replica count.
+
+       Store-agnostic. It never touches an event store - it reads the Service Bus message body and
+       nothing else - so there is one of these, not three, and it ships with every events scaffold.
+       That is also why it scales freely on the sqlite branch, where the events service is pinned to
+       a single replica.
+
+       It links src/shared/Contracts and src/shared/Handlers rather than referencing a host. The
+       handler logic is WidgetCompletedV1Handler, the same class Wolverine runs in-process under the
+       local transport; the Function is only an adapter onto it, so there is one handler and two
+       ways of hosting it rather than two handlers.
+
+       AssemblyName and RootNamespace are pinned for the same casing reason as every other
+       lowercase-named project here. -->
+  <PropertyGroup>
+    <AssemblyName>template.events.functions</AssemblyName>
+    <RootNamespace>template.events.functions</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" />
+    <!-- For [MessageIdentity] on the linked contract, and nothing else: this project never starts
+         a Wolverine runtime. The test suite references it for the same reason. -->
+    <PackageReference Include="WolverineFx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\shared\Contracts\**\*.cs" LinkBase="Shared\Contracts" />
+    <Compile Include="..\shared\Handlers\**\*.cs" LinkBase="Shared\Handlers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Reaches up and out of event-project/ on purpose, exactly as the three hosts do: staging
+         folds the events slice into src/ and rewrites this to a normal sibling path. -->
+    <ProjectReference Include="..\..\..\base-project\src\template.servicedefaults\template.servicedefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

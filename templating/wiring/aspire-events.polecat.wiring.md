@@ -21,7 +21,7 @@ already pins `mssql/server:2025-latest` for that reason. Azure SQL Database has 
 The events slice is folded into `src/` and `tests/`, so it uses the scaffold's single central
 package file rather than carrying one of its own. Add this `ItemGroup`:
 
-```xml
+```xml wire file=Directory.Packages.props kind=packages
   <ItemGroup Label="Wolverine + Polecat">
     <!-- Every WolverineFx.* satellite must stay on the core's exact version: their Wolverine
          dependency is an exact-ish range, and mixing them is how you get a MissingMethodException
@@ -33,12 +33,21 @@ package file rather than carrying one of its own. Add this `ItemGroup`:
          without this the service throws InvalidOperationException before serving anything. Nothing
          in the source names it, so do not prune it as an unused dependency. -->
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.33.0" />
-    <!-- The optional transport. Referenced unconditionally because both branches of
-         Events:Transport are live code; it costs nothing until the configuration selects it. -->
+    <!-- The transport. Referenced unconditionally because both branches of Events:Transport are
+         live code; it costs nothing until the configuration selects it. -->
     <PackageVersion Include="WolverineFx.AzureServiceBus" Version="6.33.0" />
+    <!-- DefaultAzureCredential, for the deployed namespace: it picks up the container app's
+         managed identity through AZURE_CLIENT_ID, so no connection string exists. -->
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- Polecat arrives transitively via WolverineFx.Polecat; pinned explicitly anyway so the event
          store's version is visible here rather than inferred from a dependency graph. -->
     <PackageVersion Include="Polecat" Version="5.22.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Azure Functions - the widget-completed consumer">
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" Version="5.24.0" />
   </ItemGroup>
 ```
 
@@ -49,13 +58,17 @@ Every other package the slice needs — `Microsoft.AspNetCore.OpenApi`,
 
 Insert **above** the line containing `<<addon-src-projects>>`:
 
-```xml
+```xml wire file=*.slnx at=<<addon-src-projects>> pos=above
     <Project Path="src/template.events.polecat/template.events.polecat.csproj" />
+    <Project Path="src/template.events.functions/template.events.functions.csproj" />
 ```
+
+The second project is the `widget-completed` consumer on Azure Functions. It is store-agnostic and
+reads nothing but the Service Bus message body, so it is the same project on every event store.
 
 Insert **above** the line containing `<<addon-test-projects>>`:
 
-```xml
+```xml wire file=*.slnx at=<<addon-test-projects>> pos=above
     <Project Path="tests/template.events.tests/template.events.tests.csproj" />
 ```
 
@@ -76,7 +89,7 @@ run. `src/shared/README.md` records this.
 
 Add after the `Database` block, keeping the trailing comma:
 
-```json
+```json wire file=.aspire/appsettings.json kind=json-member after=Database
   "Events": {
     "Transport": "local",
     "Enabled": false
@@ -86,7 +99,7 @@ Add after the `Database` block, keeping the trailing comma:
 `Enabled` is off by default. `Transport` is `local` by default, which uses Wolverine's durable local
 queues — backed by the same SQL Server outbox tables, so the whole outbox path is exercised with no
 broker and no extra container. Setting it to `azureservicebus` starts the Azure Service Bus emulator
-instead. Override either for one run with `$env:Events__Enabled = "true"` and
+and the Functions consumer instead, which is the shape a deployment runs. Override either for one run with `$env:Events__Enabled = "true"` and
 `$env:Events__Transport = "azureservicebus"`.
 
 `Transport` is written **before** `Enabled` on purpose, so that removing it
@@ -96,7 +109,7 @@ leaves valid JSON. The order does not matter once it is in your file.
 
 Insert **below** the line containing `<<addon-resources>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-resources>> pos=below
 // The event-sourcing slice, behind Events:Enabled. Read the same way Database:Provider is above,
 // and with the same intent: one configuration value decides the shape of the run, in one place.
 //
@@ -139,20 +152,28 @@ if (eventsEnabled
     if (eventsTransport.Equals("azureservicebus", StringComparison.OrdinalIgnoreCase))
     {
         // The emulator, so this runs with no Azure subscription. It is not free: the image requires
-        // accepting a EULA and starts its own companion SQL Server, which is why this is opt-in
-        // rather than the default.
+        // accepting a EULA and starts its own companion SQL Server, which is why this is opt-in.
         //
         // The AMQP port is pinned because Wolverine's UseAzureServiceBusEmulator() addresses the
         // emulator at its well-known ports rather than through service discovery. It also needs the
         // management endpoint on 5300; if that turns out not to be reachable, drop AutoProvision()
-        // in the events service and rely on the queue declared just below, which Aspire writes into
-        // the emulator's own configuration.
+        // in src/shared/Messaging/ServiceBusTransport.cs and rely on the queue declared just below,
+        // which Aspire writes into the emulator's own configuration.
         var serviceBus = builder.AddAzureServiceBus("servicebus")
             .RunAsEmulator(emulator => emulator.WithHostPort(5672));
 
         serviceBus.AddServiceBusQueue("widget-completed");
 
         events.WithReference(serviceBus).WaitFor(serviceBus);
+
+        // The queue's only consumer under this transport - the events service publishes and does not
+        // listen. Runs under Azure Functions Core Tools, which must be on PATH, and brings an
+        // implicit host storage account that Aspire runs on Azurite. The resource name "servicebus"
+        // is the trigger's Connection name, which is how the emulator's connection reaches it.
+        builder.AddAzureFunctionsProject("functions",
+                                         "../src/template.events.functions/template.events.functions.csproj")
+            .WithReference(serviceBus)
+            .WaitFor(serviceBus);
     }
 }
 ```
@@ -160,24 +181,25 @@ if (eventsEnabled
 ## 5. `.aspire/apphost.cs` — package directives
 
 `#:package Aspire.Hosting.SqlServer@13.5.1` is **already present** — this variant pairs with
-`--dbProvider sqlserver`. The transport package is not. Insert it **above** the line containing
-`<<addon-packages>>`:
+`--dbProvider sqlserver`. The transport and Functions packages are not. Insert them **above** the
+line containing `<<addon-packages>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-packages>> pos=above
 #:package Aspire.Hosting.Azure.ServiceBus@13.5.1
+#:package Aspire.Hosting.Azure.Functions@13.5.1
 ```
 
-It is needed even when `Events:Transport` is `local`, because both branches of the transport switch
-are compiled.
+Both are needed even when `Events:Transport` is `local`, because both branches of the transport
+switch are compiled.
 
 ---
 
-## 6. `IaC/` — one setting, and one honest caveat
+## 6. `IaC/` — one setting
 
-`IaC/containerapp.events.tf` and `IaC/servicebus.tf` were added by this add-on and Terraform loads
-them automatically. One thing does have to be set by hand:
+`IaC/containerapp.events.tf`, `IaC/servicebus.tf` and `IaC/functions.tf` were added by this add-on
+and Terraform loads them automatically. One thing does have to be set by hand:
 
-```hcl
+```hcl manual
 # IaC/envs/<environment>.tfvars
 include_events = true
 ```
@@ -193,11 +215,14 @@ strands committed-but-undispatched outbox messages.
 
 `IaC/servicebus.tf` provisions a namespace, the `widget-completed` queue and `Azure Service Bus Data
 Owner` for the workload identity - the same queue name the AppHost declares on the emulator, so the
-local and deployed topologies match. It stays unused until `Events:Transport` is `azureservicebus`,
-and moving there for real also means replacing `UseAzureServiceBusEmulator()` in the events host
-with `UseAzureServiceBus(fullyQualifiedNamespace, credential)`. The namespace's address is already
-supplied to the container as `AzureServiceBus__FullyQualifiedNamespace`, and `AZURE_CLIENT_ID` is
-set so `DefaultAzureCredential` picks the right managed identity.
+local and deployed topologies match. Deployed, `events_transport` defaults to `azureservicebus`, and
+the events service sees `AzureServiceBus__FullyQualifiedNamespace` and switches from the emulator to
+that namespace on its own, authenticating as the managed identity named by `AZURE_CLIENT_ID`.
+`IaC/functions.tf` puts the consumer on **Flex Consumption**, which scales with the length of that
+queue and to zero when it is empty. The Function has its own storage account for its deployment
+package, and it reaches both the storage account and the namespace with the same managed identity,
+so no connection string exists. Flex Consumption is not offered in every region; check
+`az functionapp list-flexconsumption-locations` if the service plan fails to create.
 
 ---
 
@@ -208,14 +233,15 @@ dotnet build <Name>.slnx
 dotnet test tests/template.events.tests          # unit tests only; no Docker needed
 $env:Events__Enabled = "true"; aspire run        # the eventstore database and events should appear
 
-# and the Service Bus path, which adds two containers
+# and the Service Bus path, which adds the emulator's two containers, Azurite and the Function.
+# Needs Azure Functions Core Tools (func) on PATH.
 $env:Events__Enabled = "true"; $env:Events__Transport = "azureservicebus"; aspire run
 ```
 
 Then exercise the slice — `POST /widgets`, `POST /widgets/{id}/complete`, `GET /widgets/{id}`. The GET
 returns 404 or the old status for a moment: that is the async projection, not a bug. On the Service
-Bus run, confirm in the dashboard's trace view that the integration event actually round-tripped
-through the emulator rather than a local queue.
+Bus run, the `functions` resource should log `widget-completed-v1 received`, and the trace should
+show the hop through the emulator.
 
 ## Notes for the generated docs
 
@@ -244,8 +270,17 @@ through the emulator rather than a local queue.
   the Roslyn compiler from the core package, and the default `TypeLoadMode.Dynamic` compiles handler
   glue at startup, so without that reference the service throws at run time — after `dotnet build`
   and `dotnet test` have both passed. Do not prune it.
-- **Moving to real Azure Service Bus** is replacing `UseAzureServiceBusEmulator()` in the events
-  service with `UseAzureServiceBus(fullyQualifiedNamespace, credential)` and dropping the emulator
-  from the AppHost. The emulator caps out at 50 entities and 10 concurrent connections, does not
-  persist across a container restart, and does not support partitioned entities — it is a
-  development affordance, not a small production broker.
+- **Two transports, one handler.** Under `local`, `WidgetCompletedV1Handler` runs in-process on
+  Wolverine's durable local queues. Under `azureservicebus`, the events service only publishes, and
+  the Function in `src/<Name>.events.functions` calls the same handler class. The transport is
+  chosen in `src/shared/Messaging/ServiceBusTransport.cs`, which uses the real namespace when
+  `AzureServiceBus:FullyQualifiedNamespace` is set and the emulator when it is not.
+- **The events service must not listen on `widget-completed`.** The Function is the queue's only
+  consumer. A Wolverine listener would compete with it for messages, so each would quietly see about
+  half of them. `ServiceBusTransportTests` fails if one is added.
+- **Service Bus delivers at least once.** A throw in the Function abandons the message, and it is
+  redelivered up to the queue's max delivery count before it goes to the dead-letter queue. A handler
+  that does real work has to be idempotent on `MessageId`.
+- **The emulator is a development affordance, not a small production broker.** It caps out at 50
+  entities and 10 concurrent connections, does not persist across a container restart, and does not
+  support partitioned entities.

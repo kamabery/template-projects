@@ -157,6 +157,45 @@
         ]
       }
     },
+    "dbProviderManifest": {
+      "//": "The data store as .aspirestarter.json records it, for the aspire-addon CLI. stage.ps1 writes that file.",
+      "type": "generated",
+      "generator": "switch",
+      "replaces": "\"dbProvider\": \"postgres\"",
+      "parameters": {
+        "evaluator": "C++",
+        "datatype": "string",
+        "cases": [
+          {
+            "condition": "(dbProvider == 'sqlserver')",
+            "value": "\"dbProvider\": \"sqlserver\""
+          },
+          {
+            "condition": "(dbProvider == 'sqlite')",
+            "value": "\"dbProvider\": \"sqlite\""
+          },
+          {
+            "condition": "",
+            "value": "\"dbProvider\": \"postgres\""
+          }
+        ]
+      }
+    },
+    "nameManifest": {
+      "//": "The -n value verbatim, for .aspirestarter.json. sourceName rewrites contents with the casing of the token it matched, so the lowercase sourceName loses the original casing - which the Blazor add-on, PascalCase throughout, needs back.",
+      "type": "generated",
+      "generator": "join",
+      "replaces": "AspireStarterProjectName",
+      "parameters": {
+        "separator": "",
+        "symbols": [
+          {
+            "type": "ref",
+            "value": "name"
+          }
+        ]
+      }
+    },
     "skipRestore": {
       "type": "parameter",
       "datatype": "bool",

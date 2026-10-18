@@ -2,6 +2,7 @@ using Fisher;
 using JasperFx.Events.Daemon;
 using JasperFx.Events.Projections;
 using template.events.Abstractions;
+using template.events.Messaging;
 using template.events.Projections;
 using template.events.Storage;
 using Wolverine;
@@ -76,11 +77,11 @@ builder.UseWolverine(options =>
     // project calls SaveChangesAsync itself.
     options.Policies.AutoApplyTransactions();
 
-    // No broker, and no Events:Transport switch either - unlike the Polecat host. Every broker
-    // worth reaching for here would need a container, and this host exists precisely so that the
-    // sqlite branch needs none. Messages route to local in-process queues, made durable by the same
-    // SQLite outbox tables, so a message still survives a restart between commit and dispatch.
-    options.Policies.UseDurableLocalQueues();
+    // Durable local queues on the SQLite outbox by default, so `aspire run` on this branch still
+    // needs no Docker. Azure Service Bus only when Events:Transport says so, which is the deployed
+    // default and, locally, an explicit opt-in to the emulator's containers. Shared by all three
+    // hosts - see ServiceBusTransport.
+    options.UseConfiguredTransport(builder.Configuration);
 });
 
 var app = builder.Build();

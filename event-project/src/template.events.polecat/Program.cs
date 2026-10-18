@@ -2,11 +2,10 @@ using JasperFx.Events.Daemon;
 using JasperFx.Events.Projections;
 using Polecat;
 using template.events.Abstractions;
-using template.events.Contracts;
+using template.events.Messaging;
 using template.events.Projections;
 using template.events.Storage;
 using Wolverine;
-using Wolverine.AzureServiceBus;
 using Wolverine.Polecat;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -75,38 +74,9 @@ builder.UseWolverine(options =>
     // project calls SaveChangesAsync itself.
     options.Policies.AutoApplyTransactions();
 
-    // The transport, read the same way Database:Provider is: one configuration value decides the
-    // shape of the run. Both branches are live code and neither is a scaffolding conditional -
-    // flipping this is a configuration change, not a code change.
-    //
-    // "local" by default because it costs nothing: durable local queues are backed by the same SQL
-    // Server outbox tables, so a message still survives a restart between commit and dispatch, and
-    // `aspire run` starts no extra containers. "azureservicebus" is the Azure-shaped path, and the
-    // AppHost starts the Service Bus emulator to match - which is two more containers, one of them
-    // another SQL Server.
-    var transport = builder.Configuration["Events:Transport"] ?? "local";
-
-    if (transport.Equals("azureservicebus", StringComparison.OrdinalIgnoreCase))
-    {
-        // The emulator rather than a real namespace, so a scaffold runs with no Azure subscription.
-        // It needs two endpoints - AMQP for messaging and HTTP for management - which is why the
-        // AppHost pins both container ports. Real Azure Service Bus uses one address for both, and
-        // moving to it is replacing this call with UseAzureServiceBus(namespace, credential).
-        options.UseAzureServiceBusEmulator()
-            // Declares the queue below if it is not already there. The AppHost declares it too, so
-            // this is belt and braces rather than the only thing standing the topology up.
-            .AutoProvision();
-
-        options.PublishMessage<WidgetCompletedV1>().ToAzureServiceBusQueue("widget-completed");
-        options.ListenToAzureServiceBusQueue("widget-completed");
-    }
-    else
-    {
-        // No broker. Messages route to local in-process queues, and this makes those queues durable:
-        // they are backed by the same SQL Server outbox tables, so a message survives a restart
-        // between commit and dispatch.
-        options.Policies.UseDurableLocalQueues();
-    }
+    // Durable local queues on the SQL Server outbox by default, Azure Service Bus when
+    // Events:Transport says so. Shared by all three hosts - see ServiceBusTransport.
+    options.UseConfiguredTransport(builder.Configuration);
 });
 
 var app = builder.Build();

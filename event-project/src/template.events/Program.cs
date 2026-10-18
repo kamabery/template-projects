@@ -2,6 +2,7 @@ using JasperFx.Events.Daemon;
 using JasperFx.Events.Projections;
 using Marten;
 using template.events.Abstractions;
+using template.events.Messaging;
 using template.events.Projections;
 using template.events.Storage;
 using Wolverine;
@@ -72,11 +73,9 @@ builder.UseWolverine(options =>
     // project calls SaveChangesAsync itself.
     options.Policies.AutoApplyTransactions();
 
-    // No broker is configured, on purpose - see the README. Messages route to local in-process
-    // queues, and this makes those queues durable: they are backed by the same Postgres outbox
-    // tables, so a message survives a restart between commit and dispatch. Adding a real transport
-    // later is a registration here and nothing else.
-    options.Policies.UseDurableLocalQueues();
+    // Durable local queues on the Postgres outbox by default, Azure Service Bus when
+    // Events:Transport says so. Shared by all three hosts - see ServiceBusTransport.
+    options.UseConfiguredTransport(builder.Configuration);
 });
 
 var app = builder.Build();

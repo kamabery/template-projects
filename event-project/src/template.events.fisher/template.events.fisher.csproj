@@ -5,8 +5,9 @@
        Fisher is the Critter Stack's SQLite event store, so this project is the same code as
        template.events against the same shape of API from a different assembly. It is what keeps the
        sqlite branch's promise: choosing SQLite means `aspire run` needs no Docker at all, and
-       turning events on must not quietly break that. There is no container here and no transport
-       broker - a local file and durable local queues backed by it.
+       turning events on must not quietly break that. There is no container here and, by default, no
+       transport broker - a local file and durable local queues backed by it. Azure Service Bus is
+       the deployed default and an explicit local opt-in; see src/shared/Messaging.
 
        It is a separate project rather than a conditional region because a project may reference
        exactly one event store - see Directory.Packages.props for why. -->
@@ -25,6 +26,11 @@
          WolverineFx stopped shipping it in v6. Auto-registers on reference, so nothing in the
          source names it - do not prune it as an unused dependency. -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <!-- The transport, selected by Events:Transport in src/shared/Messaging/ServiceBusTransport.cs.
+         Referenced unconditionally because both branches are live code; it costs nothing until
+         the configuration selects it. -->
+    <PackageReference Include="WolverineFx.AzureServiceBus" />
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Fisher" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />

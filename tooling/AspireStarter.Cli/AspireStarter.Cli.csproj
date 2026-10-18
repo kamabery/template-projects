@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- aspire-addon: applies an AspireStarter add-on template to an existing scaffold, merging the
+       edits dotnet new cannot make. Released at the same version as the template pack. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>aspire-addon</ToolCommandName>
+    <PackageId>AspireStarter.Addon</PackageId>
+    <Version>1.0.0</Version>
+    <Description>Adds AspireStarter add-ons (events, React, Blazor) to an existing AspireStarter scaffold.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AspireStarter.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

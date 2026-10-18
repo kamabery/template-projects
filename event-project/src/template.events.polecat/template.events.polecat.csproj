@@ -25,9 +25,11 @@
          WolverineFx stopped shipping it in v6. Auto-registers on reference, so nothing in the
          source names it - do not prune it as an unused dependency. -->
     <PackageReference Include="WolverineFx.RuntimeCompilation" />
-    <!-- The optional transport. Referenced unconditionally because both branches of
-         Events:Transport are live code; it costs nothing until the configuration selects it. -->
+    <!-- The transport, selected by Events:Transport in src/shared/Messaging/ServiceBusTransport.cs.
+         Referenced unconditionally because both branches are live code; it costs nothing until
+         the configuration selects it. -->
     <PackageReference Include="WolverineFx.AzureServiceBus" />
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Polecat" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />

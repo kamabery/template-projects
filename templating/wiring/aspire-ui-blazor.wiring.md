@@ -10,25 +10,25 @@ the `.scaffold/` directory.
 
 Insert **above** the line containing `<<addon-ui-projects>>`:
 
-```xml
+```xml wire file=*.slnx at=<<addon-ui-projects>> pos=above
     <Project Path="src/ui/blazor/Template.Blazor.Maui.Pages/Template.Blazor.Maui.Pages.csproj" />
 ```
 
 Then, **if the WebAssembly host was included** (`--web`), also insert:
 
-```xml
+```xml wire file=*.slnx at=<<addon-ui-projects>> pos=above when=web
     <Project Path="src/ui/blazor/Template.Blazor.Maui.Web/Template.Blazor.Maui.Web.csproj" />
 ```
 
 And **if the MAUI host was included** (`--maui`), also insert:
 
-```xml
+```xml wire file=*.slnx at=<<addon-ui-projects>> pos=above when=maui
     <Project Path="src/ui/blazor/Template.Blazor.Maui/Template.Blazor.Maui.csproj" />
 ```
 
 Insert **above** the line containing `<<addon-test-projects>>`:
 
-```xml
+```xml wire file=*.slnx at=<<addon-test-projects>> pos=above
     <Project Path="tests/Template.Blazor.Maui.Tests/Template.Blazor.Maui.Tests.csproj" />
 ```
 
@@ -39,7 +39,7 @@ resource - it is built as a dependency of whichever host consumes it.
 
 **Only if `--web`.** Insert **below** the line containing `<<addon-resources>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-resources>> pos=below when=web
 // Blazor WebAssembly. WaitFor, not WithReference: WithReference injects service-discovery
 // environment variables and this client cannot read them - the browser fetches its configuration
 // from wwwroot/appsettings.json. WaitFor still gates startup on the health check above, which is
@@ -56,7 +56,7 @@ builder.AddCSharpApp("blazor-web",
 
 **Only if `--maui`.** Insert **below** the line containing `<<addon-resources>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-resources>> pos=below when=maui
 // The MAUI host is a desktop and mobile client, not a service, and it only builds where its
 // workload and target framework line up - net10.0-windows10.0.19041.0 on Windows, ios/maccatalyst
 // on a Mac. WithExplicitStart keeps it out of the automatic startup set: it appears in the
@@ -71,7 +71,7 @@ builder.AddCSharpApp("maui", "../src/ui/blazor/Template.Blazor.Maui/Template.Bla
 **Only if `--web`.** The WebAssembly host is the one client that is genuinely cross-origin. Set
 `Cors:AllowedOrigins` to match the WASM host's `Properties/launchSettings.json`:
 
-```json
+```json wire file=src/template.api/appsettings.json kind=json-member after=AllowedHosts when=web
   "Cors": {
     "AllowedOrigins": [
       "http://localhost:5280",

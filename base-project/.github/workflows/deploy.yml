@@ -103,8 +103,9 @@ jobs:
             --image "${project_name}-api:${IMAGE_TAG}" \
             --file "${api_project}/Dockerfile" .
 
-          # One events host at most, and only if this project has the slice at all.
-          events_project=$(ls -d src/*.events* 2>/dev/null | grep -v ".tests" | head -1 || true)
+          # One events host at most, and only if this project has the slice at all. The Functions
+          # project matches the same glob and has no image - it deploys as a zip, below.
+          events_project=$(ls -d src/*.events* 2>/dev/null | grep -v -e ".tests" -e ".functions" | head -1 || true)
           if [ -n "$events_project" ]; then
             az acr build --registry "$ACR_NAME" \
               --image "${project_name}-events:${IMAGE_TAG}" \
@@ -196,6 +197,22 @@ jobs:
             -var-file="envs/${TF_ENV}.tfvars" \
             -var="image_tag=${IMAGE_TAG}" \
             -var="cors_allowed_origins=[\"${blazor_url}\"]"
+
+      # The widget-completed consumer. Flex Consumption runs code rather than an image, so this is a
+      # zip of the published worker rather than an `az acr build`, and it has to follow the apply
+      # that creates the function app.
+      - name: publish the Functions consumer
+        if: hashFiles('src/*.events.functions/*.csproj') != ''
+        working-directory: IaC
+        run: |
+          set -euo pipefail
+          functions_project=$(ls -d ../src/*.events.functions | head -1)
+          dotnet publish "$functions_project" -c Release -o "$RUNNER_TEMP/functions"
+          (cd "$RUNNER_TEMP/functions" && zip -qr "$RUNNER_TEMP/functions.zip" .)
+          az functionapp deployment source config-zip \
+            --resource-group "$RG_NAME" \
+            --name "$(terraform output -raw function_app_name)" \
+            --src "$RUNNER_TEMP/functions.zip"
 
       - uses: actions/setup-node@v4
         with:

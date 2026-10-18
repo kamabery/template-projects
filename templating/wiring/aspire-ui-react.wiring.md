@@ -12,7 +12,7 @@ The AppHost owns it through `AddViteApp`.
 
 Insert **above** the line containing `<<addon-packages>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-packages>> pos=above
 #:package Aspire.Hosting.JavaScript@13.5.1
 ```
 
@@ -20,7 +20,7 @@ Insert **above** the line containing `<<addon-packages>>`:
 
 Insert **below** the line containing `<<addon-resources>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-resources>> pos=below
 // React, on the Vite dev server.
 //   WithReference(api)  -> API_HTTP / API_HTTPS, read by vite.config.ts for the /api proxy.
 //   WithOtlpExporter    -> OTLP endpoint + api key for browser RUM. HttpProtobuf is required:
@@ -37,7 +37,7 @@ var ui = builder.AddViteApp("ui", "../src/ui/react")
 
 Insert **below** the line containing `<<addon-publish>>`:
 
-```csharp
+```csharp wire file=.aspire/apphost.cs at=<<addon-publish>> pos=below
 // On publish the React UI becomes a static site behind YARP, which also reverse-proxies /api to
 // the API so the browser stays same-origin exactly as it does in dev.
 #pragma warning disable ASPIREJAVASCRIPT001

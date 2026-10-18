@@ -2,11 +2,12 @@
 
 Terraform for Azure. Everything the application needs to run outside `aspire run`: the API and the
 optional events service on **Azure Container Apps**, the front ends on **Azure Static Web Apps**,
-and the data store that matches the EF provider this project was scaffolded with.
+the data store that matches the EF provider this project was scaffolded with, and - with the events
+slice - **Azure Service Bus** plus an **Azure Functions** consumer that scales with the queue.
 
 Terraform loads every `*.tf` in this directory, which is why the add-ons need no merge step: the
-React front end is `frontend.react.tf`, the events slice is `containerapp.events.tf` plus
-`servicebus.tf`, and a scaffold simply has the files for the pieces it has.
+React front end is `frontend.react.tf`, the events slice is `containerapp.events.tf`,
+`servicebus.tf` and `functions.tf`, and a scaffold simply has the files for the pieces it has.
 
 ## What gets created
 
@@ -22,6 +23,7 @@ resource group
 ├── database                                           database.tf -> modules/database-*
 │   └── appdb, and eventstore when include_events
 ├── service bus namespace + widget-completed queue       servicebus.tf            (events only)
+├── function app: consumer   Flex Consumption + storage functions.tf             (events only)
 ├── static web app: react           Standard + linked  frontend.react.tf        (react only)
 └── static web app: blazor          Free, cross-origin frontend.blazor-web.tf   (blazor web only)
 ```
@@ -32,9 +34,10 @@ resource group
 | --- | --- |
 | **Front end to API** | A scaffold has one front end. React's Static Web App **links** the API container app as a backend, so the browser calls a same-origin `/api` — the same shape Vite's proxy gives in development. Blazor WebAssembly instead calls the API's own address cross-origin, which is also what it does in development, and is why it is the one client that needs CORS. Each deployed front end therefore reaches the API the same way it does locally. |
 | **Network** | Public endpoints with firewall rules. No VNet, no private endpoints, no private DNS. Cheap, fast to apply, and reachable from a laptop — which is what a scaffold should be. Moving to private networking is a real change, not a flag. |
-| **Identity** | One user-assigned managed identity, granted `AcrPull`, `Key Vault Secrets User` and `Azure Service Bus Data Owner`. Database credentials are generated here, stored in Key Vault, and referenced by the container apps by URI. No credential is an app setting. |
+| **Identity** | One user-assigned managed identity, granted `AcrPull`, `Key Vault Secrets User`, `Azure Service Bus Data Owner` and, on the Functions storage account, `Storage Blob Data Owner`. Database credentials are generated here, stored in Key Vault, and referenced by the container apps by URI. No credential is an app setting. |
 | **State** | Local by default so `terraform init` works immediately. `bootstrap/` creates the remote state account when a second person needs it; `backend.tf` is four lines of uncommenting away. |
 | **Environments** | `envs/*.tfvars`, not workspaces. |
+| **Messaging** | Deployed, the events service publishes `WidgetCompletedV1` to Service Bus on every event store (`events_transport` defaults to `azureservicebus`), through its own outbox. The **only** consumer is an Azure Function on **Flex Consumption**: target-based scaling divides the queue length by `maxConcurrentCalls` in the project's `host.json`, up to `functions_max_instances`, and scales to zero when the queue is empty. The events service keeps `min_replicas = 1` for its projection daemon; the consumer does not inherit that. It reaches its storage and the namespace with the same managed identity, so there is no connection string anywhere. |
 
 ## Apply it
 
@@ -99,10 +102,14 @@ swa deploy src/ui/react/dist --deployment-token "$(terraform output -raw react_a
 - **Choosing SQLite is choosing one replica.** SQLite has a single writer, so the module reports
   `single_writer = true` and both container apps pin `max_replicas = 1`. The file lives on an Azure
   Files share; a container's own filesystem is wiped on every revision.
-- **The Service Bus namespace is idle unless the event store is Polecat.** Only that host reads
-  `Events:Transport = "azureservicebus"`. Marten and Fisher publish through Wolverine's durable
-  local queues on their own event store. The namespace is provisioned so the seam and the RBAC are
-  already right, not because something is using it.
+- **The Functions consumer deploys as a zip, not an image.** Flex Consumption runs code from the
+  `deployment` blob container in its own storage account, so it has no image in the registry. The
+  workflow publishes it after the apply that creates the app:
+  `az functionapp deployment source config-zip -g <rg> -n $(terraform output -raw function_app_name) --src <zip>`.
+- **Flex Consumption is not offered in every region.** If the `FC1` service plan fails to create,
+  check `az functionapp list-flexconsumption-locations` before anything else.
+- **Never add a Service Bus listener to the events service.** The Function is the queue's only
+  consumer; a second one competes with it, and each quietly receives about half of the messages.
 - **`AllowAzureServices` admits any Azure resource, in any tenant.** That is the cost of having no
   VNet. The generated credential in Key Vault is what actually gates access.
 - **Never use HCL's string-rendering function here** - the one that reads a file and interpolates

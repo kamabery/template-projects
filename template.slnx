@@ -72,6 +72,11 @@
     <!--#if (includeEventsFisher) -->
     <Project Path="event-project/src/template.events.fisher/template.events.fisher.csproj" />
     <!--#endif -->
+    <!--#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher) -->
+    <!-- The widget-completed consumer on Azure Functions. Store-agnostic, so one project serves
+         every event store and ships with every events scaffold. -->
+    <Project Path="event-project/src/template.events.functions/template.events.functions.csproj" />
+    <!--#endif -->
     <!-- <<addon-src-projects>> - scaffolding inserts add-on src projects above this line. -->
   </Folder>
 

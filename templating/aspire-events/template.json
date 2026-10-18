@@ -9,7 +9,7 @@
   "identity": "AspireStarter.Events",
   "groupIdentity": "AspireStarter.Events",
   "name": "Aspire starter add-on: Wolverine event sourcing",
-  "description": "Adds a Wolverine event-sourcing slice - aggregate handlers, a transactional outbox and an async projection - on the event store that matches the base scaffold's data store: Marten on PostgreSQL, Polecat on SQL Server 2025, or Fisher on SQLite. Emits one .scaffold/aspire-events.<store>.wiring.md, which lists the solution, AppHost and package-version edits the scaffolding skill applies.",
+  "description": "Adds a Wolverine event-sourcing slice - aggregate handlers, a transactional outbox and an async projection, with an Azure Functions consumer on Azure Service Bus - on the event store that matches the base scaffold's data store: Marten on PostgreSQL, Polecat on SQL Server 2025, or Fisher on SQLite. Emits one .scaffold/aspire-events.<store>.wiring.md, which lists the solution, AppHost and package-version edits the scaffolding skill applies.",
   "shortName": "aspire-events",
   "sourceName": "template",
   "preferNameDirectory": false,
@@ -54,7 +54,7 @@
         {
           "choice": "polecat",
           "displayName": "Polecat (SQL Server 2025 / Azure SQL)",
-          "description": "Pair with --dbProvider sqlserver. A second database on the API's SQL Server, which the AppHost pins to 2025-latest for Polecat's native json type. Adds an optional Azure Service Bus transport, off by default."
+          "description": "Pair with --dbProvider sqlserver. A second database on the API's SQL Server, which the AppHost pins to 2025-latest for Polecat's native json type."
         },
         {
           "choice": "fisher",

@@ -1,7 +1,7 @@
 variable "events_transport" {
-  description = "How the events service publishes its integration event. \"local\" uses Wolverine's durable local queues, backed by the event store's own outbox tables, and needs no broker. \"azureservicebus\" uses the namespace in servicebus.tf - see the note there about which event stores can actually read this."
+  description = "How the events service publishes its integration event. \"azureservicebus\", the default, publishes to the queue in servicebus.tf, where the Function in functions.tf consumes it. \"local\" keeps it in-process on Wolverine's durable local queues, backed by the event store's own outbox tables, and leaves the Function idle."
   type        = string
-  default     = "local"
+  default     = "azureservicebus"
 
   validation {
     condition     = contains(["local", "azureservicebus"], var.events_transport)
@@ -91,8 +91,9 @@ resource "azurerm_container_app" "events" {
         value = var.events_transport
       }
 
-      # The seam for moving off the emulator. The service authenticates with the same managed
-      # identity, so there is no connection string to carry.
+      # Read by src/shared/Messaging/ServiceBusTransport.cs: set means the real namespace, unset means
+      # the local emulator. The service authenticates with the same managed identity, so there is no
+      # connection string to carry.
       env {
         name  = "AzureServiceBus__FullyQualifiedNamespace"
         value = "${azurerm_servicebus_namespace.main.name}.servicebus.windows.net"

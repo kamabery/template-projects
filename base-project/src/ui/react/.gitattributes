@@ -1,0 +1,3 @@
+# The TanStack Router plugin regenerates this with LF on every dev run. Pin it to LF so an
+# autocrlf=true checkout doesn't show it modified after `npm run dev` / `aspire run`.
+src/routeTree.gen.ts text eol=lf

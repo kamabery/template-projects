@@ -38,16 +38,90 @@ must match `--dbProvider`.
 
 ## Scaffolding with Claude (recommended)
 
-Run the **`/scaffold-aspire-app`** skill in Claude Code. It interviews you on
-four decisions — the first resource, the data store, event sourcing, and which
-single front end — runs the templates, merges the new projects into the solution and
-AppHost, generates the project's README and CLAUDE.md, and verifies it builds
-and tests green.
+You scaffold from **another workspace's** Claude Code session, not from this
+one. This workspace is the source of the templates, the CLI and the skills;
+the new project lives somewhere else.
 
-The merge step is why the skill exists: `dotnet new` writes files but cannot
+### One-time setup
+
+1. **Point the skills at this workspace.** Both skills build and install the
+   pack and the CLI from the directory `ASPIRE_STARTER_DIR` names, and ask
+   you for it when it is unset. Set it once, at user scope:
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable("ASPIRE_STARTER_DIR", "<path-to>\template-projects", "User")
+   ```
+
+   Restart the terminal (and Claude Code) so new sessions see it.
+
+2. **Install the skills as a plugin, per project.** This repository is its own
+   plugin marketplace (`.claude-plugin/marketplace.json`). From the directory
+   whose Claude sessions should have the skills:
+
+   ```powershell
+   claude plugin marketplace add <path-to>\template-projects --scope project
+   claude plugin install aspire-starter@aspirestarter --scope project
+   ```
+
+   That records both in that directory's `.claude/settings.json`, so only
+   sessions opened there see the skills. Do it in the directory that will
+   **contain** new projects (for `boot-strap-app`) and again in each
+   scaffold's root (for `enhance-app`) — a fresh scaffold does not inherit it.
+   The marketplace entry is a local path, so use `--scope local` instead
+   (`.claude/settings.local.json`, not committed) where the directory is
+   shared with anyone else.
+
+3. **Optionally, pre-install the pack and the CLI** with the commands under
+   "Scaffolding by hand" below. If you skip this, the skills do it on first
+   use from `ASPIRE_STARTER_DIR`.
+
+### Creating a project
+
+Open Claude Code in the directory that should **contain** the new project
+(e.g. `D:\code\Scratchpad`) and run:
+
+```text
+/aspire-starter:boot-strap-app
+```
+
+or just ask for it ("scaffold a new Aspire app called Inventory"). It
+interviews you on four decisions — the first resource, the data store, event
+sourcing, and which single front end — runs the templates, merges the new
+projects into the solution and AppHost, generates the project's README and
+CLAUDE.md, builds a [graphify](https://github.com/Graphify-Labs/graphify)
+knowledge graph of the result, and verifies it builds and tests green. The
+graph step installs `graphifyy[terraform]` with `uv` (or `pipx`) if graphify is
+missing, and is skipped, with a note in the report, when neither installer is on
+`PATH`.
+
+The merge step is the hard part: `dotnet new` writes files but cannot
 edit an existing `.slnx` or `apphost.cs`. Each add-on ships a
-`.scaffold/*.wiring.md` describing the exact blocks to insert; the skill applies
-them.
+`.scaffold/*.wiring.md` describing the exact blocks to insert, and the
+`aspire-addon` CLI in `tooling/` applies them.
+
+### Adding to an existing project
+
+Open Claude Code **in the scaffold's root** (where `.aspirestarter.json` is)
+and run:
+
+```text
+/aspire-starter:enhance-app
+```
+
+or ask ("add a React front end"). It drives the same CLI, which reads
+`.aspirestarter.json` so the add-on gets the same name, resource and data
+store as the base. A scaffold made before that file existed can be adopted
+with `aspire-addon adopt`.
+
+### After changing this workspace
+
+- **Skills changed:** nothing to refresh. The marketplace is a local
+  directory, so the plugin is read from this folder. An edit, committed or
+  not, takes effect at the next session start or after `/reload-plugins`.
+  `claude plugin update` reports "nothing to update" for that reason.
+- **Templates or CLI changed:** rebuild and reinstall both (see "Scaffolding
+  by hand"). `aspire-addon` refuses to add to a scaffold whose recorded pack
+  version differs from the installed one; upgrading a scaffold is not built.
 
 ## Scaffolding by hand
 
@@ -61,13 +135,20 @@ dotnet new uninstall AspireStarter.Templates
 dotnet new install artifacts/nupkg/AspireStarter.Templates.1.0.0.nupkg
 ```
 
-Then scaffold — `aspire-base` first, each add-on after, passing `-n <Name>` and
-`--resource <Resource>` to every one:
+and the `aspire-addon` CLI:
 
 ```bash
-dotnet new aspire-base     -n MyProject -o MyProject --dbProvider postgres --resource Product
-dotnet new aspire-ui-react -n MyProject -o MyProject --resource Product
-# ...then apply .scaffold/*.wiring.md and delete .scaffold/
+dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
+dotnet tool install -g AspireStarter.Addon --configfile tooling/install.nuget.config
+```
+
+Then scaffold the base, and add each add-on from inside it. The CLI takes the
+name, resource and data store from the base's `.aspirestarter.json`:
+
+```bash
+dotnet new aspire-base -n MyProject -o MyProject --dbProvider postgres --resource Product
+cd MyProject
+aspire-addon add ui-react          # or: events | ui-blazor --web true --maui false
 ```
 
 ## Running the reference implementation

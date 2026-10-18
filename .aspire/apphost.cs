@@ -8,10 +8,12 @@
 //#if (dbProvider == "sqlserver" || includeEventsPolecat)
 #:package Aspire.Hosting.SqlServer@13.5.1
 //#endif
-//#if (includeEventsPolecat)
-// Only the Polecat events host can ask for a broker, and only when Events:Transport says so. The
-// package is still needed unconditionally there, because both transport branches are live code.
+//#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher)
+// Any events host can ask for a broker, and only when Events:Transport says so - and the Function
+// that consumes it comes with it. Both packages are still needed unconditionally, because both
+// transport branches are live code.
 #:package Aspire.Hosting.Azure.ServiceBus@13.5.1
+#:package Aspire.Hosting.Azure.Functions@13.5.1
 //#endif
 // <<addon-packages>> - scaffolding inserts add-on #:package directives above this line.
 #:property AspireUseCliBundle=true
@@ -186,6 +188,11 @@ builder.AddCSharpApp("maui", "../base-project/src/ui/blazor/Template.Blazor.Maui
 // directives pull in - which does not include it. The raw indexer is also how Database:Provider is
 // read above, so this stays consistent with it.
 var eventsEnabled = bool.TryParse(builder.Configuration["Events:Enabled"], out var eventsFlag) && eventsFlag;
+
+// One nullable slot for the events service, filled in by whichever store branch below is live - the
+// same pattern as appdb above, and for the same reason: every region is live in this workspace, so
+// the transport block after them can only reach the service through a slot none of them declares.
+IResourceBuilder<CSharpAppResource>? events = null;
 //#endif
 
 //#if (includeEventsMarten)
@@ -198,8 +205,8 @@ if (eventsEnabled && databaseProvider.Equals("postgres", StringComparison.Ordina
                             .WithDataVolume()
                             .AddDatabase("eventstore");
 
-    builder.AddCSharpApp("events", "../event-project/src/template.events/template.events.csproj",
-                         options => options.LaunchProfileName = "http")
+    events = builder.AddCSharpApp("events", "../event-project/src/template.events/template.events.csproj",
+                                  options => options.LaunchProfileName = "http")
         // WithReference, like api above and unlike blazor-web: this is a .NET process that reads
         // ConnectionStrings:eventstore straight out of its configuration. WaitFor matters because
         // Marten applies its schema at startup in Development.
@@ -226,19 +233,11 @@ if (eventsEnabled
     // plus the Service Bus emulator's own companion would be three engines on one machine.
     var eventstore = sqlServer.AddDatabase("eventstore");
 
-    // "local" by default: Wolverine's durable local queues are backed by the same SQL Server outbox
-    // tables, so the whole outbox path is exercised with no broker and no extra container.
-    // "azureservicebus" is the Azure-shaped path and costs two more containers.
-    var eventsTransport = builder.Configuration["Events:Transport"] ?? "local";
-
-    var events = builder.AddCSharpApp("events",
-                                      "../event-project/src/template.events.polecat/template.events.polecat.csproj",
-                                      options => options.LaunchProfileName = "http")
+    events = builder.AddCSharpApp("events",
+                                  "../event-project/src/template.events.polecat/template.events.polecat.csproj",
+                                  options => options.LaunchProfileName = "http")
         .WithReference(eventstore)
         .WaitFor(eventstore)
-        // Forwarded so the service and this file cannot disagree about the transport, exactly as
-        // Database__Provider is forwarded to the API above.
-        .WithEnvironment("Events__Transport", eventsTransport)
         .WithHttpHealthCheck("/health")
         .WithExternalHttpEndpoints()
         .WithUrlForEndpoint("http", url =>
@@ -246,12 +245,48 @@ if (eventsEnabled
             url.DisplayText = "Events API docs";
             url.Url = "/api-docs";
         });
+}
+//#endif
+
+//#if (includeEventsFisher)
+if (eventsEnabled && databaseProvider.Equals("sqlite", StringComparison.OrdinalIgnoreCase))
+{
+    // No store resource at all, which is the entire point of this branch: choosing SQLite means
+    // `aspire run` needs no Docker, and turning events on must not quietly take that away. The
+    // connection string is set by hand for the same reason the API's is above - there is no
+    // resource to reference - and is relative, so the file lands beside the built service.
+    events = builder.AddCSharpApp("events",
+                                  "../event-project/src/template.events.fisher/template.events.fisher.csproj",
+                                  options => options.LaunchProfileName = "http")
+        .WithEnvironment("ConnectionStrings__eventstore", "Data Source=eventstore.db")
+        .WithHttpHealthCheck("/health")
+        .WithExternalHttpEndpoints()
+        .WithUrlForEndpoint("http", url =>
+        {
+            url.DisplayText = "Events API docs";
+            url.Url = "/api-docs";
+        });
+}
+//#endif
+
+//#if (includeEventsMarten || includeEventsPolecat || includeEventsFisher)
+// The transport, for whichever events host is live. "local" by default: Wolverine's durable local
+// queues are backed by that host's own outbox tables, so the whole outbox path is exercised with no
+// broker and no extra container - which is what keeps the sqlite branch free of Docker.
+// "azureservicebus" is the Azure-shaped path, and it is what a deployment runs.
+if (events is not null)
+{
+    var eventsTransport = builder.Configuration["Events:Transport"] ?? "local";
+
+    // Forwarded so the service and this file cannot disagree about the transport, exactly as
+    // Database__Provider is forwarded to the API above.
+    events.WithEnvironment("Events__Transport", eventsTransport);
 
     if (eventsTransport.Equals("azureservicebus", StringComparison.OrdinalIgnoreCase))
     {
         // The emulator, so this runs with no Azure subscription. It is not free: the image requires
-        // accepting a EULA and starts its own companion SQL Server, which is why this is opt-in
-        // rather than the default for the sqlserver branch.
+        // accepting a EULA and starts its own companion SQL Server, and on the sqlite branch it is
+        // the only thing that needs Docker - which is why this is opt-in rather than the default.
         //
         // The AMQP port is pinned because Wolverine's UseAzureServiceBusEmulator() addresses the
         // emulator at its well-known ports rather than through service discovery. It also needs the
@@ -264,28 +299,16 @@ if (eventsEnabled
         serviceBus.AddServiceBusQueue("widget-completed");
 
         events.WithReference(serviceBus).WaitFor(serviceBus);
-    }
-}
-//#endif
 
-//#if (includeEventsFisher)
-if (eventsEnabled && databaseProvider.Equals("sqlite", StringComparison.OrdinalIgnoreCase))
-{
-    // No store resource at all, which is the entire point of this branch: choosing SQLite means
-    // `aspire run` needs no Docker, and turning events on must not quietly take that away. The
-    // connection string is set by hand for the same reason the API's is above - there is no
-    // resource to reference - and is relative, so the file lands beside the built service.
-    builder.AddCSharpApp("events",
-                         "../event-project/src/template.events.fisher/template.events.fisher.csproj",
-                         options => options.LaunchProfileName = "http")
-        .WithEnvironment("ConnectionStrings__eventstore", "Data Source=eventstore.db")
-        .WithHttpHealthCheck("/health")
-        .WithExternalHttpEndpoints()
-        .WithUrlForEndpoint("http", url =>
-        {
-            url.DisplayText = "Events API docs";
-            url.Url = "/api-docs";
-        });
+        // The queue's only consumer under this transport - the events service publishes and does not
+        // listen. Runs under Azure Functions Core Tools, which must be on PATH, and brings an
+        // implicit host storage account that Aspire runs on Azurite. The resource name "servicebus"
+        // is the trigger's Connection name, which is how the emulator's connection reaches it.
+        builder.AddAzureFunctionsProject("functions",
+                                         "../event-project/src/template.events.functions/template.events.functions.csproj")
+            .WithReference(serviceBus)
+            .WaitFor(serviceBus);
+    }
 }
 //#endif
 

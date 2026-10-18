@@ -51,11 +51,21 @@
   </ItemGroup>
 
   <ItemGroup Label="Transports">
-    <!-- Azure Service Bus, used only by the Polecat host and only when Events:Transport says so.
-         Wolverine's own emulator support (UseAzureServiceBusEmulator) is what makes the local run
-         work with no Azure subscription; the default path uses durable local queues and needs
-         neither this broker nor the emulator container. -->
+    <!-- Azure Service Bus, referenced by all three hosts and selected by Events:Transport - see
+         src/shared/Messaging/ServiceBusTransport.cs. It is the deployed default; locally the
+         default is durable local queues, which need neither this broker nor the emulator
+         container, and Wolverine's UseAzureServiceBusEmulator is what makes the opt-in local run
+         work with no Azure subscription. -->
     <PackageVersion Include="WolverineFx.AzureServiceBus" Version="6.33.0" />
+    <!-- DefaultAzureCredential, for the deployed namespace. It picks up the container app's
+         user-assigned managed identity through AZURE_CLIENT_ID, so no connection string exists. -->
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Azure Functions - the widget-completed consumer, template.events.functions">
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" Version="5.24.0" />
   </ItemGroup>
 
   <ItemGroup Label="ASP.NET Core">

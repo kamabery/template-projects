@@ -75,6 +75,30 @@ Every rewrite in `Edit-StagedFile` **must** match at least once or staging fails
 renaming something in the live workspace breaks the build here rather than producing a silently
 wrong scaffold.
 
+## Wiring annotations
+
+`aspire-addon` (in `tooling/`) applies a wiring file by reading the info string of its fences:
+
+| Info string | Applied as |
+| --- | --- |
+| `<lang> wire file=<path> at=<<marker>> pos=above\|below` | inserted relative to the marker line; blocks sharing a marker keep file order |
+| `… when=web` / `when=maui` | only when that `aspire-ui-blazor` host was asked for |
+| `xml wire file=Directory.Packages.props kind=packages` | its `ItemGroup`s, minus every `PackageVersion` id the scaffold already pins |
+| `json wire file=<path> kind=json-member after=<key>` | a top-level member after `<key>`, by text insertion so comments survive |
+| `<lang> manual` | not applied; reported as a setting the user chooses |
+| no annotation | prose or an example; ignored |
+
+`file=*.slnx` means the one solution at the scaffold root. Paths are substituted like the rest of the
+file, so `src/template.api/...` names the scaffold's own project. A block is skipped when its first
+code line is already in the target, so write that line to be distinctive.
+
+## `.aspirestarter.json`
+
+`stage.ps1` writes the manifest into `aspire-base` with three tokens `template.json` substitutes: the
+name verbatim (`nameManifest`), the resource, and the data store (`dbProviderManifest`). `packVersion`
+comes from `packaging/AspireStarter.Templates.csproj`. The CLI refuses to add to a scaffold whose
+`packVersion` differs from the installed pack.
+
 ## `IaC/`
 
 Terraform loads every `*.tf` in a directory, so an add-on contributes infrastructure by dropping a
@@ -193,6 +217,18 @@ survived and the other two did not, and confirm that the only surviving `sourceN
 under `IaC/` is the `template {` block in the two `copyOnly` files. Row 4 is also where to run
 `docker build -f src/<name>.api/Dockerfile .` — the build context is the scaffold root, and getting
 that wrong is invisible until someone deploys.
+
+Then the late-add rows, which exercise `aspire-addon` against a scaffold that already exists. Run
+`dotnet test tooling/tooling.slnx` first, then pack and install the tool.
+
+| # | Steps | Asserts |
+| --- | --- | --- |
+| L1 | `aspire-base --dbProvider postgres --resource Product`, then `aspire-addon add events` | `.aspirestarter.json` lists `events`/`marten`; builds, both suites pass, AppHost compiles |
+| L2 | as L1 on `sqlserver`, and on `sqlite` | only the `.polecat` / `.fisher` host; `sqlite` has no container resource |
+| L3 | base, delete every `<<addon-*>>` line, then `add ui-react`, then `add ui-blazor --web true` | every edit reports `AppliedByFallback`; builds, AppHost compiles, `npm run build` passes; `docs/DESIGN.md` reported identical |
+| L4 | `add events` twice | the second is refused; `git status` clean |
+| L5 | edit `packVersion` in the manifest, then `add` | refused with the skew message; tree unchanged |
+| L6 | a pre-manifest scaffold, `aspire-addon adopt`, then `add events` | `adopt` asks for `--name` unless a Blazor project carries it; then succeeds |
 
 For rows 6–8, also confirm exactly one `.scaffold/aspire-events.*.wiring.md` was emitted and that
 `--eventStore` matched `--dbProvider`. A mismatch is the failure mode worth rehearsing: the scaffold

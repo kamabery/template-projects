@@ -89,7 +89,7 @@ constant clarification.
 - **Name:** base-project (solution file `template.slnx`, at the workspace root)
 - **Purpose:** a working reference implementation, packaged as a series of `dotnet new` templates
   that agents call to scaffold new projects. See "Templating" below and the
-  `/scaffold-aspire-app` skill.
+  `/boot-strap-app` skill.
 - **Location:** the projects live in `base-project/`; the solution, `aspire.config.json` and the
   `.aspire/` AppHost sit one level up at the workspace root, so a second sibling project
   (`event-project/`) can join the same solution and AppHost — which it now does. The workspace is
@@ -104,12 +104,16 @@ constant clarification.
   WebAssembly). Both front ends serve the same three pages against the same API.
   An optional Wolverine event-sourcing slice sits beside all of it, on the Critter Stack event store
   that matches the data store: Marten on Postgres, Polecat on SQL Server 2025, Fisher on SQLite.
+  Its integration event travels on Azure Service Bus once deployed, consumed by an Azure Function
+  on Flex Consumption that scales with the queue.
 
 ### Workspace layout
 
 ```
 CLAUDE.md                      this file; workspace-level, NOT part of the template
-.claude/                       Claude Code settings + the /scaffold-aspire-app skill; NOT packed
+.claude/                       Claude Code settings + the /boot-strap-app and /enhance-app
+                               skills; NOT packed
+.claude-plugin/                marketplace.json: ships those two skills as the aspire-starter plugin
 template.slnx                  the solution; its project paths are base-project/-prefixed
 aspire.config.json             pointer to the AppHost; the CLI walks UP to find it
 nuget.config                   mirrors base-project/nuget.config — the AppHost restores from here
@@ -119,7 +123,8 @@ base-project/                  the project source — everything below is relati
 event-project/                 the optional Wolverine event-sourcing slice; see "Events" below
 templating/                    stage.ps1 + one template.json per template + the wiring files
 packaging/                     the template pack's .csproj; NOT in template.slnx, deliberately
-artifacts/                     generated: staged template trees and the .nupkg. Not source.
+tooling/                       the aspire-addon CLI + its tests (tooling.slnx); NOT in template.slnx
+artifacts/                     generated: staged template trees and the .nupkgs. Not source.
 specs/                         design proposals; see "specs/ — proposals not yet implemented"
 ```
 
@@ -194,15 +199,21 @@ event-project/
   src/shared/                  LINKED source, not a project - no .csproj. Everything that is NOT
                                specific to an event store: Domain/ (the aggregate, its events and
                                commands, and WidgetDecisions - the decision logic every host shares),
-                               Contracts/, Projections/WidgetSummary.cs, Controllers/,
+                               Contracts/ (incl. WidgetCompletedV1Wire, the body reader),
+                               Messaging/ServiceBusTransport.cs (the Events:Transport switch),
+                               Projections/WidgetSummary.cs, Controllers/,
                                Abstractions/IWidgetSummaries.cs. See its README.md
   src/template.events/         Marten  / PostgreSQL         host
   src/template.events.polecat/ Polecat / SQL Server 2025    host
   src/template.events.fisher/  Fisher  / SQLite             host
   src/template.events*/        each host also carries a Dockerfile, written for the SCAFFOLD layout
                                (src/ at the root) rather than this one — see "IaC" below
+  src/template.events.functions/  Azure Functions isolated worker: the widget-completed consumer.
+                               Store-agnostic, so one project for all three hosts and never pruned.
+                               Links shared/Contracts and shared/Handlers; no Dockerfile (Flex zip)
   tests/template.events.tests/ xUnit + Shouldly + AutoFixture; unit tests only, no Docker.
-                               References .domain ONLY - never a host - so it is store-agnostic
+                               Links shared/Domain, Contracts and Messaging ONLY - never a host - so
+                               it is store-agnostic
 ```
 
 Three host projects and no shared one, and neither half of that is a stylistic choice.
@@ -262,9 +273,10 @@ $env:Database__Provider = "sqlserver"; aspire run
 # store runs follows Database:Provider - see "Events" below.
 $env:Events__Enabled = "true"; aspire run
 
-# On the sqlserver branch only, swap the durable local queues for Azure Service Bus. Starts the
-# Service Bus emulator (two more containers, and it accepts a EULA); default is "local".
-$env:Database__Provider = "sqlserver"; $env:Events__Enabled = "true"; $env:Events__Transport = "azureservicebus"; aspire run
+# On any branch, swap the durable local queues for Azure Service Bus and the Functions consumer -
+# the shape a deployment runs. Starts the Service Bus emulator (two more containers, and it accepts
+# a EULA) plus Azurite, and needs Azure Functions Core Tools (func) on PATH; default is "local".
+$env:Events__Enabled = "true"; $env:Events__Transport = "azureservicebus"; aspire run
 
 # Build the C# side
 dotnet build template.slnx
@@ -275,6 +287,12 @@ dotnet pack packaging/AspireStarter.Templates.csproj -c Release -o artifacts/nup
 # Uninstall first, and do NOT use --force. See "Reinstalling the pack" in templating/README.md.
 dotnet new uninstall AspireStarter.Templates
 dotnet new install artifacts/nupkg/AspireStarter.Templates.1.0.0.nupkg
+
+# The aspire-addon CLI: test, pack, install. Reinstall after a rebuild with `dotnet tool update`
+# and the same --configfile. The plain add-source flag is refused under package source mapping.
+dotnet test tooling/tooling.slnx
+dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
+dotnet tool install -g AspireStarter.Addon --configfile tooling/install.nuget.config
 
 # Terraform, from IaC/ at the workspace root. Validate only - nothing here is ever applied from
 # this workspace, which is template source rather than a deployed application.
@@ -344,15 +362,16 @@ later is `aspire update`, which rewrites the `#:` directives rather than you edi
 | — | on the sqlite branch it is a local file — no resource, no Docker | — |
 | `events` | the event-store host matching `Database:Provider` — only when `Events:Enabled` | `5090` http (`7290` https, unused); dashboard link opens `/api-docs` |
 | `servicebus` | Azure Service Bus emulator + its companion SQL Server — only when `Events:Transport=azureservicebus` | `5672` AMQP (pinned), `5300` management |
+| `functions` | `template.events.functions` under Functions Core Tools, plus its implicit Azurite host storage — only when `Events:Transport=azureservicebus` | assigned by the AppHost |
 | — | Aspire dashboard | `15087` http, `17143` https |
 | — | Dashboard OTLP | `19113` gRPC, `19114` http (https profile: `21222` / `21223`) |
 
 Sources: each project's `Properties/launchSettings.json`, `.aspire/apphost.run.json` (mirrored in
 the `profiles` block of `aspire.config.json`), `src/ui/react/vite.config.ts`.
 
-The `events*` and `servicebus` rows are absent from a default `aspire run`. They appear only when
-`Events:Enabled` is true, and which of them appears follows `Database:Provider` — see "Events"
-below. `events` pins its `http` launch profile like `api` does, but for a
+The `events*`, `servicebus` and `functions` rows are absent from a default `aspire run`. They appear
+only when `Events:Enabled` is true, which of the store rows appears follows `Database:Provider`, and
+the last two need `Events:Transport=azureservicebus` as well — see "Events" below. `events` pins its `http` launch profile like `api` does, but for a
 weaker reason: nothing hard-codes its address, so the pin only keeps the README's `curl` examples
 and this table honest.
 
@@ -616,11 +635,14 @@ and which is deliberately absent here (see below).
 
 **The event store follows `Database:Provider`. It is not a second choice.**
 
-| `Database:Provider` | Event store | Where it lives | Default transport |
-| --- | --- | --- | --- |
-| `postgres` | Marten | its own `events-pg` container | durable local queues |
-| `sqlserver` | **Polecat** | the `eventstore` database on the **same `sql` container** | durable local queues; `Events:Transport=azureservicebus` opts in |
-| `sqlite` | **Fisher** | a local `eventstore.db` file — **no container, no Docker** | durable local queues |
+| `Database:Provider` | Event store | Where it lives |
+| --- | --- | --- |
+| `postgres` | Marten | its own `events-pg` container |
+| `sqlserver` | **Polecat** | the `eventstore` database on the **same `sql` container** |
+| `sqlite` | **Fisher** | a local `eventstore.db` file — **no container, no Docker** |
+
+The transport is the same on every row: durable local queues under `aspire run` by default, Azure
+Service Bus once deployed. See "The transport" below.
 
 All three are JasperFx, all three are MIT with no revenue threshold and no licence key, and all
 three present the same API: `AddX(...).IntegrateWithWolverine().AddAsyncDaemon(...)`, plus
@@ -641,13 +663,33 @@ generates `JSON_OBJECT` and `GENERATE_SERIES`. Azure SQL Database has that type 
 so the deployed path needs nothing extra. Relaxing the tag back to 2022 breaks the event store at
 startup while the API carries on working, which makes it look like an events bug.
 
-**Azure Service Bus is opt-in, and only on the `sqlserver` branch.** `Events:Transport` is `local`
-by default: Wolverine's durable local queues are backed by the same SQL Server outbox tables, so the
-whole outbox path — commit, store, dispatch, acknowledge — is exercised with no broker and no extra
-container. `azureservicebus` starts the Service Bus emulator instead, which costs two containers
-(one of them another SQL Server) and requires accepting a EULA. Both branches are live code; moving
-to a real namespace is replacing `UseAzureServiceBusEmulator()` with
-`UseAzureServiceBus(namespace, credential)`.
+**The transport: local queues under `aspire run`, Azure Service Bus deployed, on every store.**
+`event-project/src/shared/Messaging/ServiceBusTransport.cs` is the one switch, and all three hosts
+call it. `Events:Transport` is `local` by default in `.aspire/appsettings.json`: Wolverine's durable
+local queues are backed by the event store's own outbox tables, so the whole outbox path — commit,
+store, dispatch, acknowledge — is exercised with no broker, and `WidgetCompletedV1Handler` consumes
+in-process. `azureservicebus` publishes `WidgetCompletedV1` to the `widget-completed` queue and does
+**not** listen on it. The consumer is then `template.events.functions`, an Azure Function whose
+`ServiceBusTrigger` calls the same handler class. That makes one handler with two hosts, not two
+handlers, which is what keeps Functions from being a second programming model. The switch uses a
+real namespace when `AzureServiceBus:FullyQualifiedNamespace` is set (Terraform sets it, together
+with `AZURE_CLIENT_ID` for `DefaultAzureCredential`) and the emulator when it is not. Locally,
+`azureservicebus` costs the emulator's two containers and Azurite, and needs Functions Core Tools.
+On the `sqlite` branch it is the only thing that brings Docker in, which is why it is opt-in there.
+Deployed, `events_transport` defaults to `azureservicebus`.
+
+**Why a Function, not a Wolverine listener in a container app.** The two halves want opposite
+scaling. The events service holds a projection daemon and an outbox, so it never drops below one
+replica, and on SQLite it is pinned to exactly one. The consumer should follow the queue. Flex
+Consumption's target-based scaling divides queue length by `maxConcurrentCalls` in the Function's
+`host.json` and scales to zero when the queue is empty. The Function never touches an event store,
+so it scales freely even on SQLite.
+
+**The wire body is pinned by a test.** A Function is not a Wolverine endpoint, so it reads the
+Service Bus body itself through `WidgetCompletedV1Wire.Read`. Wolverine writes **camelCase**; with
+`JsonSerializerOptions.Default`, every field silently deserializes to its default value instead of
+failing. `WidgetCompletedV1WireTests` writes the body through Wolverine's own `DefaultSerializer`,
+so a Wolverine upgrade that changes it fails there, not in a deployed Function.
 
 **MassTransit is deliberately not here.** v9 is source-available and requires a licence key at run
 time, and its free tier is a discount you apply for — neither belongs in a template strangers run.
@@ -707,13 +749,14 @@ need a live Postgres and so would break the workspace's Docker-free `dotnet test
 
 `IaC/` at the workspace root is a Terraform configuration for Azure. It is the deployment answer the
 rest of this workspace did not have: the API and the optional events service on **Azure Container
-Apps**, the front ends on **Azure Static Web Apps**, and a managed store matching whichever EF
-provider was scaffolded. `IaC/README.md` carries the operator-facing detail; this section is the
+Apps**, the front ends on **Azure Static Web Apps**, a managed store matching whichever EF
+provider was scaffolded, and with the events slice **Azure Service Bus** plus an **Azure Functions**
+consumer on Flex Consumption. `IaC/README.md` carries the operator-facing detail; this section is the
 part a future session needs before editing anything.
 
 **One `.tf` file per add-on, and no markers.** Terraform loads every `*.tf` in a directory, so an
 add-on contributes by dropping a file in — `frontend.react.tf`, `frontend.blazor-web.tf`,
-`containerapp.events.tf`, `servicebus.tf`. This is the one place `dotnet new`'s inability to merge
+`containerapp.events.tf`, `servicebus.tf`, `functions.tf`. This is the one place `dotnet new`'s inability to merge
 costs nothing, which is why there is no `<<addon-iac>>` marker and why the wiring files have almost
 nothing to say about it. `stage.ps1` distributes the subsets.
 
@@ -738,7 +781,7 @@ Substitution would rename it and the configuration would stop parsing. So `conta
 not contain that bare word at all** — `Assert-TerraformSubstitutionSafe` in `stage.ps1` fails the
 build if one does. The same trap makes HCL's `templatefile()` function unusable here.
 
-Six things that will bite you:
+Seven things that will bite you:
 
 - **A container app probe must not target `/health`.** `MapDefaultEndpoints()` maps `/health` and
   `/alive` in Development only and these containers run as Production, so the probes use
@@ -760,9 +803,13 @@ Six things that will bite you:
   container app and goes same-origin; Blazor WebAssembly goes cross-origin and needs CORS, exactly as
   the three-clients-three-answers table above describes. A scaffold only ever has one of them, which
   is also what keeps the "one linked backend per container app" limit from ever mattering.
-- **The Service Bus namespace is idle on two of the three event stores.** Only the Polecat host reads
-  `Events:Transport`. It ships everywhere so the seam and the RBAC already exist; `servicebus.tf`
-  says so in its own header, and so does each events wiring file.
+- **The Functions consumer is code, not an image.** `functions.tf` runs it on Flex Consumption from
+  a `deployment` blob container in its own storage account, reached by the shared managed identity
+  with shared keys disabled. The workflow publishes it as a zip *after* the apply that creates the
+  app, and excludes `*.events.functions` from the events image glob. Flex is not in every region.
+- **`containerapp.events.tf` is `copyOnly`, so it must not name the queue.** The queue name contains
+  the resource token, and `Assert-ResourceTokenSafe` fails staging if a copyOnly file contains it.
+  Say "the queue in servicebus.tf" there instead.
 
 The Dockerfiles (`src/template.api/Dockerfile`, one per events host) take the **scaffold root** as
 their build context, because the API references three sibling projects and each events host compiles
@@ -932,7 +979,7 @@ The plural is **mechanically the singular plus `s`**: every plural in the source
 parameter for it — two `replaces` tokens where one is a prefix of the other have no defined
 ordering. `--resource Person` scaffolds `Persons`, and fixing that is a rename after the fact.
 
-Each of the four also carries its share of `IaC/`: the base takes everything but the four add-on
+Each of the four also carries its share of `IaC/`: the base takes everything but the five add-on
 `.tf` files, and each add-on takes exactly the ones it owns. Terraform loads every `*.tf` in a
 directory, so that is the whole of the composition — see "IaC" above.
 
@@ -944,7 +991,7 @@ dotnet new uninstall AspireStarter.Templates
 dotnet new install artifacts/nupkg/AspireStarter.Templates.1.0.0.nupkg
 ```
 
-`/scaffold-aspire-app` (in `.claude/skills/`) is the entry point: it interviews the user on the four
+`/boot-strap-app` (in `.claude/skills/`) is the entry point: it interviews the user on the four
 decisions — data store, events, and which single front end — runs the templates, applies
 the wiring, generates the scaffold's README and CLAUDE.md, and verifies the result.
 
@@ -984,24 +1031,56 @@ Every lowercase-named project also pins `<AssemblyName>` and `<RootNamespace>`, 
 follows the lowercase content form rather than the file name's casing. Without those pins
 `MigrationsAssembly` lookups and `InternalsVisibleTo` name an assembly that does not exist.
 
+**Day-2 add-ons: the `aspire-addon` CLI.** `tooling/AspireStarter.Cli` is a `dotnet tool`
+(`AspireStarter.Addon`, command `aspire-addon`) that adds an add-on to a scaffold that already
+exists — and, since the scaffolding skill uses it too, at creation as well. Four things hold it up:
+
+- **The manifest.** `stage.ps1` writes `.aspirestarter.json` into `aspire-base` (it is not in
+  `base-project/`, which would make the live workspace claim to be a scaffold), and `template.json`
+  substitutes it: `nameManifest` keeps `-n` *verbatim*, because contents only ever see the lowercase
+  form and the Blazor add-on needs the casing back; `dbProviderManifest` records the store;
+  `packVersion` is stamped from `packaging/*.csproj`. The CLI passes `-n`, `--resource` and the
+  derived `--eventStore` to every add-on from it — which retires the two silent mismatches the
+  skill used to guard by hand — and records each add-on it applies. `aspire-addon adopt` writes one
+  into a scaffold made before this existed.
+- **Annotated wiring.** A fence in `templating/wiring/*.wiring.md` whose info string reads
+  ` ```csharp wire file=… at=<<marker>> pos=above|below [when=web|maui]` (or `kind=packages`, or
+  `kind=json-member after=<key>`) is applied by the CLI; ` ```hcl manual` is reported as the user's to
+  set; an unannotated fence is prose. The wiring file is still the single source, and
+  `WiringParserTests` pins the block count of each one against the real files.
+- **Nothing half-applied.** The add-on is instantiated in a temp directory; a file that exists
+  byte-identical is skipped (that is how two front ends share `docs/DESIGN.md`), one that differs
+  refuses the run; every edit is planned in memory and written only if all of them resolve. A block
+  whose first code line is already present is skipped, which makes a re-run harmless.
+- **Markers, else structure.** A missing `<<addon-*>>` marker falls back to placement by structure:
+  after the last `#:` directive, before the top-level statement calling `builder.Build()` (Roslyn),
+  or at the end of the matching `.slnx` folder. A pack version that differs from the manifest's is
+  refused — upgrading a scaffold is not built.
+
+`.claude-plugin/marketplace.json` publishes both skills as the `aspire-starter` plugin, pointing at
+`.claude/skills/` rather than copying them, so there is one copy of each.
+
 **Still open**
 
-- The pack is versioned `1.0.0` by hand in `packaging/AspireStarter.Templates.csproj`.
+- The pack is versioned `1.0.0` by hand in `packaging/AspireStarter.Templates.csproj`, and the CLI
+  must be released at the same version in `tooling/AspireStarter.Cli/AspireStarter.Cli.csproj`.
 - `templating/wiring/*.wiring.md` duplicates the resource blocks that live in `.aspire/apphost.cs`.
   Nothing enforces that they agree; the scaffold matrix is what catches drift.
 - Staging needs PowerShell 7 on `PATH`. Fine for a maintainer, a constraint for CI.
+- `aspire-addon` covers today's three add-ons. A second resource (`add resource`), new capability
+  add-ons, `upgrade`, and adding MAUI to an existing Blazor web host are not built.
 
 ### Agent-facing contract
 
 ```bash
 dotnet new install AspireStarter.Templates          # or the local .nupkg
+dotnet tool install -g AspireStarter.Addon          # locally: --configfile tooling/install.nuget.config
 dotnet new aspire-base -n MyProject -o MyProject --dbProvider postgres
-dotnet new aspire-ui-react -n MyProject -o MyProject
-# ...then apply .scaffold/*.wiring.md and delete .scaffold/
+cd MyProject && aspire-addon add ui-react           # reads .aspirestarter.json; --dry-run, --json
 ```
 
-Prefer `/scaffold-aspire-app` over driving this by hand: the wiring step is the part that is easy to
-get wrong, and the skill reads the wiring files rather than improvising the blocks.
+Prefer `/boot-strap-app` for a new project and `/enhance-app` for an existing one: the
+CLI does the merge, and the skills do the parts it cannot — the interview, the docs, verification.
 
 ### specs/ — proposals, not implemented
 
@@ -1185,7 +1264,17 @@ future session doesn't have to re-read it:
 - Don't add a Wolverine transport package (RabbitMQ, SQS, SNS, Kafka) without asking.
   `UseDurableLocalQueues()` already exercises the whole outbox path with no broker and no extra
   container, and every package added lands in every scaffolded project. `WolverineFx.AzureServiceBus`
-  is the one exception already made, and only on the `sqlserver` branch.
+  is the one exception already made, on every event store.
+- Don't add `ListenToAzureServiceBusQueue` for `widget-completed` to the events service. The Function
+  is the queue's only consumer; a Wolverine listener competes with it and each quietly receives about
+  half the messages. `ServiceBusTransportTests` fails over it.
+- Don't read the Service Bus body with `JsonSerializerOptions.Default`, or anything but
+  `WidgetCompletedV1Wire.Read`. Wolverine writes camelCase, and default options deserialize every
+  field of a real message to its default value without throwing.
+- Don't add `Microsoft.Azure.Functions.Worker.ApplicationInsights` to the Functions project.
+  `AddServiceDefaults()` makes Serilog own the logger factory, so that package's logger provider is
+  never written to - wiring that looks live and is not. The Functions host records invocations in
+  Application Insights on its own.
 - Don't register `Widget` as a projection. It is live-aggregated from its stream, which is
   what `FetchForWriting<Widget>` needs; `WidgetSummary` is the registered read model.
 - Don't reference anything in `event-project/` from `base-project/`. The dependency runs one way
@@ -1204,8 +1293,17 @@ future session doesn't have to re-read it:
   `MigrationsAssembly` lookup and `InternalsVisibleTo` point at an assembly that does not exist.
 - Don't drop `copyOnly` on `src/ui/react/package-lock.json` in `templating/aspire-ui-react/`. It
   names `@babel/template`; substitution would rewrite those package names and break `npm install`.
-- Don't add `packaging/` or `templating/` to `template.slnx`. That solution is itself template
-  content, so anything listed in it lands in every scaffold.
+- Don't add `packaging/`, `templating/` or `tooling/` to `template.slnx`. That solution is itself
+  template content, so anything listed in it lands in every scaffold.
+- Don't change a wiring block's fence info string, or add a block, without running the CLI suite
+  (`dotnet test tooling/tooling.slnx`). The annotations are what `aspire-addon` applies, and
+  `WiringParserTests` pins each file's block count; a fence that loses its `wire` tag silently
+  becomes prose the CLI skips.
+- Don't hand-edit a scaffold's `.aspirestarter.json` to get past an `aspire-addon` refusal. Every
+  refusal is a case where carrying on yields a scaffold that builds and is wrong — a version skew
+  in particular means the add-on's package pins were never tested against the base's.
+- Don't rename `.aspirestarter.json`, or the `AspireStarterProjectName` and `"dbProvider": "postgres"`
+  tokens `stage.ps1` writes into it, without changing `template.json` and the CLI with them.
 - Don't edit `artifacts/` — it is generated by `templating/stage.ps1` and rebuilt on every pack.
 - Don't commit `bin/`, `obj/`, `node_modules/`, `.tanstack/`, or `artifacts/`.
 - Don't touch `.claude/settings.local.json`.

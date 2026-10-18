@@ -434,13 +434,23 @@ $n += Copy-Tree -From $baseProject -To $base -ExcludePrefixes @(
     'src/ui',
     'tests/Template.Blazor.Maui.Tests',
     # The workspace README documents every option this repo carries, most of which a given scaffold
-    # does not have. The scaffolding skill writes a README describing what was actually chosen; the
-    # solution's <File Path="README.md" /> entry points at that one.
+    # does not have. The scaffolding skill writes a README describing what was actually chosen.
     'README.md'
 )
 
+# The solution's README entry goes with it: a hand-driven `dotnet new aspire-base` never writes a
+# README, and a solution item naming a missing file is a dangling entry. The skill adds it back
+# when it writes one. Line-based so it works whatever line endings the checkout has.
+$slnx = Join-Path $base 'template.slnx'
+$slnxText = [IO.File]::ReadAllText($slnx)
+$newline = if ($slnxText.Contains("`r`n")) { "`r`n" } else { "`n" }
+$slnxLines = $slnxText -split "`r?`n"
+$kept = @($slnxLines | Where-Object { $_.Trim() -ne '<File Path="base-project/README.md" />' })
+if ($kept.Count -ne $slnxLines.Count - 1) { throw "Expected exactly one README solution item in $slnx" }
+[IO.File]::WriteAllText($slnx, $kept -join $newline)
+
 # The two path rewrites the flattening implies.
-Edit-StagedFile -Path (Join-Path $base 'template.slnx') -Pairs @(
+Edit-StagedFile -Path $slnx -Pairs @(
     'base-project/', ''
 )
 Edit-StagedFile -Path (Join-Path $base '.aspire/apphost.cs') -Pairs @(
@@ -453,18 +463,38 @@ foreach ($rel in @('template.slnx', '.aspire/apphost.cs', '.aspire/appsettings.j
     Remove-FalseRegions -Path (Join-Path $base $rel) -FalseSymbols $falseForBase
 }
 
-# The Terraform configuration, minus the four files the add-ons own. Nothing rewrites paths here:
+# The Terraform configuration, minus the five files the add-ons own. Nothing rewrites paths here:
 # every path inside IaC/ is already relative to the scaffold root.
 $n += Copy-Tree -From (Join-Path $RepoRoot 'IaC') -To (Join-Path $base 'IaC') -ExcludePrefixes @(
     'frontend.react.tf',
     'frontend.blazor-web.tf',
     'containerapp.events.tf',
-    'servicebus.tf'
+    'servicebus.tf',
+    'functions.tf'
 )
 Assert-TerraformSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 Assert-ResourceTokenSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 
 Add-TemplateConfig -Name 'aspire-base' -Root $base
+
+# The scaffold's provenance: what it was built with, read and updated by the aspire-addon CLI so a
+# late add-on gets the same -n, --resource and data store the base did. Written here rather than
+# kept in base-project/, which would leave the live workspace carrying a file that claims it is a
+# scaffold. Each value is a token template.json substitutes: the name verbatim (contents only ever
+# see the lowercase form, and the Blazor add-on needs the original casing), the resource, and the
+# data store. The pack version comes from the one place it is declared.
+$packVersion = ([xml](Get-Content -Raw (Join-Path $RepoRoot 'packaging/AspireStarter.Templates.csproj'))).Project.PropertyGroup[0].Version
+[IO.File]::WriteAllText((Join-Path $base '.aspirestarter.json'), @"
+{
+  "name": "AspireStarterProjectName",
+  "resource": "Widget",
+  "dbProvider": "postgres",
+  "packVersion": "$packVersion",
+  "addOns": []
+}
+
+"@)
+
 Assert-ProseSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 Write-Host "aspire-base       $n files"
 
@@ -509,7 +539,9 @@ Write-Host "aspire-ui-blazor  $n files"
 # project fail to compile. And the shared half cannot be its own assembly either, because that same
 # generator has to see the aggregate and the store in one compilation; see src/shared/README.md.
 $events = Join-Path $OutputRoot 'aspire-events'
-$eventHosts = @('shared', 'template.events', 'template.events.polecat', 'template.events.fisher')
+# template.events.functions is never pruned: it is the store-agnostic widget-completed consumer.
+$eventHosts = @('shared', 'template.events', 'template.events.polecat', 'template.events.fisher',
+                'template.events.functions')
 
 $n = 0
 foreach ($project in $eventHosts) {
@@ -520,15 +552,16 @@ $n += Copy-Tree -From (Join-Path $eventProject 'tests/template.events.tests') `
 
 # The one path the flattening invalidates, in each host that carries it. The shared domain project
 # has no reference to base-project/, so it is deliberately absent from this list.
-foreach ($project in @('template.events', 'template.events.polecat', 'template.events.fisher')) {
+foreach ($project in @('template.events', 'template.events.polecat', 'template.events.fisher',
+                       'template.events.functions')) {
     Edit-StagedFile -Path (Join-Path $events "src/$project/$project.csproj") -Pairs @(
         '..\..\..\base-project\src\template.servicedefaults\', '..\template.servicedefaults\'
     )
 }
 
-# Both files ship on every event store. servicebus.tf is idle unless the store is Polecat - only
-# that host reads Events:Transport - and says so in its own header.
-Copy-IacFiles -Root $events -Files @('containerapp.events.tf', 'servicebus.tf')
+# All three ship on every event store: every host publishes to Service Bus once deployed, and the
+# Function that consumes it is store-agnostic.
+Copy-IacFiles -Root $events -Files @('containerapp.events.tf', 'servicebus.tf', 'functions.tf')
 Assert-TerraformSubstitutionSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 Assert-ResourceTokenSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 

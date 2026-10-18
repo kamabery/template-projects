@@ -3,12 +3,10 @@
 # Provisioned on every events scaffold, and authenticated with the same managed identity - no SAS
 # key, no connection string, nothing to rotate.
 #
-# BE HONEST ABOUT WHAT THIS DOES TODAY. Only the Polecat (SQL Server) events host has an
-# Events:Transport = "azureservicebus" branch in its Program.cs. On a Marten or Fisher scaffold this
-# namespace is provisioned, role-granted and then idle: those hosts publish through Wolverine's
-# durable local queues, which are backed by their own event store's outbox tables and need no
-# broker at all. It is here so the seam exists and the RBAC is already right; wiring a host to it
-# is a code change in that host, not a change here.
+# Used on every event store. All three events hosts publish WidgetCompletedV1 here when
+# Events:Transport is "azureservicebus" - the deployed default, see containerapp.events.tf - and the
+# Function in functions.tf is the queue's only consumer. The outbox in front of it is still the event
+# store's own, so a message is not lost between the event append and the send.
 
 resource "azurerm_servicebus_namespace" "main" {
   name                = "sb-${local.base_name}-${var.environment}-${local.suffix}"

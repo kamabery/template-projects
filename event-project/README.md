@@ -41,13 +41,16 @@ With the flag on, the `events` service joins the dashboard — plus, on the `pos
 database on the container that is already running; on `sqlite` there is no container at all. The
 service's dashboard link opens `/api-docs`.
 
-On the `sqlserver` branch there is a second setting, `Events:Transport`. It is `local` by default —
-Wolverine's durable local queues, backed by the same SQL Server outbox tables, with no broker and no
-extra container. Set it to `azureservicebus` to start the Azure Service Bus emulator instead, which
-costs two more containers and accepts a EULA:
+There is a second setting, `Events:Transport`, on every branch. It is `local` by default —
+Wolverine's durable local queues, backed by the event store's own outbox tables, with no broker and
+no extra container, and `WidgetCompletedV1Handler` consumes in-process. Set it to `azureservicebus`
+for the shape a deployment runs: the events service publishes to the Azure Service Bus emulator and
+stops consuming, and `src/template.events.functions` consumes instead. That costs the emulator's two
+containers (it accepts a EULA), Azurite for the Functions host, and Azure Functions Core Tools on
+`PATH` — and on the `sqlite` branch it is the only thing that brings Docker in:
 
 ```powershell
-$env:Database__Provider = "sqlserver"; $env:Events__Enabled = "true"; $env:Events__Transport = "azureservicebus"; aspire run
+$env:Events__Enabled = "true"; $env:Events__Transport = "azureservicebus"; aspire run
 ```
 
 The `Enabled` flag gates the **AppHost only**. Nothing inside the events service reads it — when the flag is
@@ -89,7 +92,9 @@ Shared, in `src/shared/` — written once, compiled into all three hosts:
 | Domain events — internal, past tense, immutable | `Domain/WidgetEvents.cs` |
 | The decision logic both handlers wrap, including the domain-to-contract mapping | `Domain/WidgetDecisions.cs` |
 | Versioned public contract with a stable wire name | `Contracts/WidgetCompletedV1.cs` |
-| Integration-event consumer over a durable local queue | `Handlers/WidgetCompletedV1Handler.cs` |
+| Integration-event consumer - in-process under `local`, called by the Function under `azureservicebus` | `Handlers/WidgetCompletedV1Handler.cs` |
+| Reading the contract off the wire, for consumers that are not Wolverine | `Contracts/WidgetCompletedV1Wire.cs` |
+| The `Events:Transport` switch: durable local queues, or publish-only to Service Bus | `Messaging/ServiceBusTransport.cs` |
 | Read model, and the rules its projection applies | `Projections/WidgetSummary.cs` |
 | HTTP surface | `Controllers/WidgetsController.cs` |
 | The one thing the controller needs from a store | `Abstractions/IWidgetSummaries.cs` |
@@ -103,6 +108,14 @@ Per host — four small files each, all of them adapters over the above:
 | The projection type | `Projections/WidgetSummaryProjection.cs` |
 | The document load behind `IWidgetSummaries` | `Storage/WidgetSummaries.cs` |
 | Event store + Wolverine + outbox bootstrap | `Program.cs` |
+
+One more project, beside the three hosts: `src/template.events.functions`, the `widget-completed`
+consumer on Azure Functions. It touches no event store, so there is one of it rather than three. It
+links `Contracts/` and `Handlers/` and is a thin `ServiceBusTrigger` over the same
+`WidgetCompletedV1Handler`, so there is one handler with two hosts rather than two handlers. Once
+deployed it runs on Flex Consumption and scales with the queue - see `IaC/functions.tf`. The events
+service publishes and never listens on that queue: a listener there would compete with the Function
+for messages, which `ServiceBusTransportTests` exists to catch.
 
 `WidgetsController` is linked in rather than referenced, so it compiles into each host and
 `AddControllers()` finds it by its normal entry-assembly scan — no `AddApplicationPart` required.
@@ -127,10 +140,10 @@ Calling it yourself commits early and takes the outgoing messages out of the sam
   `CanaryPercentage`, `IApplicationDispatcher`, legacy adapters. All of that exists to route
   traffic between a legacy path and Wolverine during a migration. There is no legacy path here, so
   the legacy adapter would be a stub with nothing behind it.
-- **Any broker other than Azure Service Bus, and that one only on the `sqlserver` branch and only
-  when asked.** No RabbitMQ, SQS or Kafka package. `Policies.UseDurableLocalQueues()` keeps messages
-  in-process but still durable, backed by the same outbox tables, which is the default everywhere.
-  Adding another transport is a registration in `Program.cs`; no handler changes.
+- **Any broker other than Azure Service Bus.** No RabbitMQ, SQS or Kafka package.
+  `Policies.UseDurableLocalQueues()` keeps messages in-process but still durable, backed by the same
+  outbox tables, which is the local default everywhere. Adding another transport is a registration
+  in `Messaging/ServiceBusTransport.cs`; no handler changes.
 - **MassTransit.** v9 is source-available and needs a licence key at run time; v8 is Apache-2.0 but
   end-of-life at the end of 2026. Wolverine's own Azure Service Bus transport covers the same ground
   under MIT, so a second messaging framework would buy nothing.
@@ -143,7 +156,7 @@ Calling it yourself commits early and takes the outgoing messages out of the sam
   `dotnet test` across this workspace is deliberately Docker-free. What that leaves uncovered is the
   code Wolverine generates around `CompleteWidgetHandler`: the `FetchForWriting` load, the
   expected-version append and the outbox commit. The unit tests cover the decision logic those wrap
-  — and they link `src/shared/Domain` and `src/shared/Contracts` only, never a host, so they are
+  — and they link `src/shared/Domain`, `Contracts` and `Messaging` only, never a host, so they are
   the same tests whichever event store a scaffold ends up with.
 
 ## Commands

@@ -15,6 +15,9 @@
 
   <ItemGroup>
     <PackageReference Include="WolverineFx" />
+    <!-- For src/shared/Messaging, which names a transport but no event store. -->
+    <PackageReference Include="WolverineFx.AzureServiceBus" />
+    <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="Shouldly" />
@@ -33,10 +36,11 @@
   <ItemGroup>
     <!-- The store-free half of src/shared/, linked rather than referenced - deliberately NOT one
          of the three event-store hosts. Everything worth unit testing is in here, and referencing a
-         host would tie this suite to one store while leaving the other two uncovered. Domain/ and
-         Contracts/ are the subset that names no ASP.NET or event-store type. -->
+         host would tie this suite to one store while leaving the other two uncovered. Domain/,
+         Contracts/ and Messaging/ are the subset that names no ASP.NET or event-store type. -->
     <Compile Include="..\..\src\shared\Domain\**\*.cs" LinkBase="Shared\Domain" />
     <Compile Include="..\..\src\shared\Contracts\**\*.cs" LinkBase="Shared\Contracts" />
+    <Compile Include="..\..\src\shared\Messaging\**\*.cs" LinkBase="Shared\Messaging" />
   </ItemGroup>
 
   <ItemGroup>

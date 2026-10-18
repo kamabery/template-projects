@@ -1,6 +1,6 @@
 ---
-name: scaffold-aspire-app
-description: Scaffold a new Aspire solution from the AspireStarter template series. Interviews the user on three decisions - data store, event sourcing, and which single front end - then runs the dotnet new templates, wires the solution and AppHost together, generates the project's README and CLAUDE.md, and verifies the result builds and tests green. Use when someone asks to create, scaffold, start or bootstrap a new Aspire project from these templates.
+name: boot-strap-app
+description: Scaffold a new Aspire solution from the AspireStarter template series. Interviews the user on three decisions - data store, event sourcing, and which single front end - then runs the dotnet new templates, wires the solution and AppHost together, generates the project's README and CLAUDE.md, builds a graphify knowledge graph of it, and verifies the result builds and tests green. Use when someone asks to create, scaffold, start or bootstrap a new Aspire project from these templates.
 ---
 
 # Scaffold an Aspire application
@@ -19,6 +19,13 @@ has not given.
 Ask all four decisions in **one** `AskUserQuestion` call. Also settle the project name and output
 directory; if the user already gave a name, do not ask for it again.
 
+**Answers supplied.** A caller that runs without a user (the claude-factory's bootstrap job) gives
+all six answers up front: name, output directory, resource, data store, events and front end. Then
+do not interview, and do not run Phase 2: check that `dotnet new list aspire-base` lists the template
+and that `aspire-addon` is on `PATH`, and if either is missing stop and say so rather than building
+or installing anything. Such a caller may also say to skip Phase 5; list graphify as a follow-up in
+the report. Everything else, from Phase 3 on, is unchanged.
+
 | Question | Header | Options |
 | --- | --- | --- |
 | What is the first resource? | `Resource` | Free text, singular PascalCase — **Product**, **Invoice**, **Customer**. Default **Widget**. This is the sample entity the scaffold is built around; the user's own noun means they never have to delete someone else's |
@@ -26,12 +33,11 @@ directory; if the user already gave a name, do not ask for it again.
 | Does it need events? | `Events` | **No** (default) / **Yes — Wolverine event sourcing**, on the event store that matches the data store above: Marten on PostgreSQL (its own extra container), Polecat on SQL Server (a second database on the same container), Fisher on SQLite (a local file, still no Docker) |
 | What is the front end? | `Front end` | **React** (Vite + TanStack + Tailwind, installable as a PWA) / **Blazor** (WebAssembly, FluentUI, MVVM) / **Blazor + mobile hybrid**, which adds the MAUI Blazor Hybrid host beside the web one / **Neither — API only** |
 
-**A scaffold gets one front end, never two.** Mobile is folded into that question rather than asked
+**A scaffold gets one front end at creation.** Mobile is folded into that question rather than asked
 separately because the MAUI host renders the same Razor Class Library the Blazor web host does — it
 is the Blazor front end on a device, not an independent choice. So the three UI answers map to
-exactly one `dotnet new` invocation, and `aspire-ui-react` and `aspire-ui-blazor` are never both run
-against the same directory. (They would collide anyway: both ship `docs/DESIGN.md`, and `dotnet new`
-refuses to overwrite it.)
+exactly one add-on, and `ui-react` and `ui-blazor` are never both run here. A second front end is a
+later, deliberate addition through the `enhance-app` skill, which supports it.
 
 Five things to state plainly rather than let the user discover:
 
@@ -53,47 +59,46 @@ Five things to state plainly rather than let the user discover:
   `mssql/server:2025-latest`, because Polecat stores events in SQL Server 2025's native `json` type;
   and picking SQLite keeps the no-Docker promise intact, at the cost of Fisher being much newer
   (1.0.x) than Marten and Polecat.
-- **Azure Service Bus is available on the SQL Server branch only, and is off by default.** It is a
+- **Azure Service Bus is available on every event store, and is off by default locally.** It is a
   run-time setting (`Events:Transport`), not a scaffold parameter, so both paths ship and either can
   be chosen later without regenerating anything. Mention it rather than asking about it: the default
-  uses Wolverine's durable local queues on the same SQL Server outbox and starts no extra container,
-  while the emulator adds two containers and requires accepting a EULA.
+  uses Wolverine's durable local queues on the event store's own outbox and starts no extra
+  container, while `azureservicebus` adds the emulator's two containers plus Azurite, requires
+  accepting a EULA, and needs Azure Functions Core Tools — on SQLite it is the only thing that
+  brings Docker in. Deployed, it is the default.
 
 ### Mapping answers to commands
 
 Let `<Name>` be the project name and `<Dir>` the output directory.
 
-| Answer | Command |
-| --- | --- |
-| always | `dotnet new aspire-base -n <Name> -o <Dir> --dbProvider <postgres\|sqlserver\|sqlite> --resource <Resource>` |
-| front end is React | `dotnet new aspire-ui-react -n <Name> -o <Dir> --resource <Resource>` |
-| front end is Blazor | `dotnet new aspire-ui-blazor -n <Name> -o <Dir> --web true --maui <false\|true> --resource <Resource>` |
-| events is yes | `dotnet new aspire-events -n <Name> -o <Dir> --eventStore <marten\|polecat\|fisher> --resource <Resource>` |
+| Answer | Command | Run from |
+| --- | --- | --- |
+| always | `dotnet new aspire-base -n <Name> -o <Dir> --dbProvider <postgres\|sqlserver\|sqlite> --resource <Resource>` | anywhere |
+| front end is React | `aspire-addon add ui-react` | `<Dir>` |
+| front end is Blazor | `aspire-addon add ui-blazor --web true --maui <false\|true>` | `<Dir>` |
+| events is yes | `aspire-addon add events` | `<Dir>` |
 
-For `aspire-ui-blazor`: `--maui true` only when the mobile answer was chosen. `--web false` is
-supported by the template but no interview answer produces it, and with `--web false --maui false`
-it emits nothing at all — so run it only for one of the two Blazor answers, and run
-`aspire-ui-react` only for the React one. **Never both.**
+The add-ons go through the `aspire-addon` CLI, not `dotnet new` directly. `aspire-base` writes
+`.aspirestarter.json` recording `-n`, `--resource` and `--dbProvider`, and the CLI passes those to
+every add-on itself — so the two silent failures this step used to carry by hand are gone: a
+`--resource` mismatch (the UI calling an endpoint the API does not serve) and an `--eventStore` that
+disagrees with `--dbProvider` (the events service never declared). The CLI derives the event store
+from the data store, then merges the add-on in — which is Phase 3 below.
 
-For `aspire-events`, **`--eventStore` must agree with `--dbProvider`** — `postgres` takes `marten`,
-`sqlserver` takes `polecat`, `sqlite` takes `fisher`. `dotnet new` cannot pass a symbol from one
-template invocation to another, so nothing enforces this for you, and a mismatch fails quietly
-rather than loudly: the scaffold still builds, but the AppHost guards the events resource on
-`Database:Provider`, so the service is simply never declared and `aspire run` comes up without it.
-
-**Pass `-n <Name>` AND `--resource <Resource>` to every add-on**, with the same values each time.
-Project renaming is driven by the first and the sample resource by the second; an add-on run
-without either produces files named after the wrong thing. A `--resource` mismatch between the base
-and a front end is the worse of the two, because it fails silently: the UI calls an endpoint the API
-does not serve, and everything still builds.
+For `aspire-ui-blazor`: `--maui true` only when the mobile answer was chosen. Run it only for one of
+the two Blazor answers, and `ui-react` only for the React one: **one front end at scaffold time.**
+(A second one can be added later with the `enhance-app` skill; that is a later decision, not
+an interview answer.)
 
 ---
 
 ## Phase 2 — Install and scaffold
 
-Templates are installed from the pack. If it is not built yet, from the template workspace:
+Templates are installed from the pack. If it is not built yet, from the template workspace, which
+`$env:ASPIRE_STARTER_DIR` names (if it is unset, ask the user where the workspace is):
 
 ```bash
+cd $env:ASPIRE_STARTER_DIR
 pwsh templating/stage.ps1
 dotnet pack packaging/AspireStarter.Templates.csproj -c Release -o artifacts/nupkg
 # Uninstall first, and do NOT use --force. See "Reinstalling the pack" in templating/README.md.
@@ -101,18 +106,35 @@ dotnet new uninstall AspireStarter.Templates
 dotnet new install artifacts/nupkg/AspireStarter.Templates.1.0.0.nupkg
 ```
 
-Then run `aspire-base` first, then each selected add-on. Run them one at a time and check each
-succeeded before the next.
+The add-ons also need the `aspire-addon` tool. If `aspire-addon` is not on `PATH`, from the template
+workspace:
+
+```bash
+cd $env:ASPIRE_STARTER_DIR
+dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
+dotnet tool install -g AspireStarter.Addon --configfile tooling/install.nuget.config
+```
+
+Then run `aspire-base` first, then `cd <Dir>` and run each selected add-on. Run them one at a time
+and check each succeeded before the next.
 
 ---
 
 ## Phase 3 — Wire
 
-Each add-on drops `.scaffold/<name>.wiring.md`. **Read every one of them and apply what it says.**
-Do not improvise the blocks from memory; the wiring files are the source of truth and they have
-already had the project name substituted into them.
+`aspire-addon add` does the wiring: it reads the add-on's `.scaffold/*.wiring.md`, applies every
+block annotated `wire`, and deletes nothing it did not create. Its report lists each edit's outcome,
+then two things that are still yours:
 
-The base template plants six markers. Insert relative to the marker line, never replacing it:
+- **Manual follow-ups** — settings the user chooses, such as `include_events = true` in the tfvars.
+- **Notes for the generated docs** — the add-on's rules, for Phase 4.
+
+If it prints `Refused:`, stop and report the message; the scaffold has not been touched. Do not
+apply the wiring by hand to get past a refusal.
+
+The rest of this phase describes what the CLI applies, so you can check its work and so the wiring
+files stay intelligible. The base template plants six markers, and blocks are inserted relative to
+the marker line, never replacing it:
 
 | Marker | File | Insert |
 | --- | --- | --- |
@@ -125,17 +147,17 @@ The base template plants six markers. Insert relative to the marker line, never 
 
 Order matters in `apphost.cs`: the React resource declares `var ui`, and the publish block uses it.
 
-Three edits live outside the markers and are easy to miss:
+Three edits live outside the markers, so they are the ones to check in the CLI's report:
 
 - **Events** adds its event store's `ItemGroup` to `Directory.Packages.props` and an `Events` block
-  to `.aspire/appsettings.json`. It adds exactly **one** solution entry — the host project. The code
-  the three hosts share lives in `src/shared/` and is *linked* into whichever host shipped, so it is
-  not a project and gets no solution entry of its own.
-- **Events on SQL Server** needs `#:package Aspire.Hosting.Azure.ServiceBus@13.5.1` added at
-  `<<addon-packages>>`, even though the transport is off by default — both branches of the
-  `Events:Transport` switch are compiled. Neither of the other two event stores adds a package
-  directive: Marten pairs with PostgreSQL and Fisher declares no container at all. The wiring file
-  you were handed says which case you are in; follow it rather than this summary.
+  to `.aspire/appsettings.json`. It adds exactly **two** `/src/` solution entries — the host project
+  and `src/<name>.events.functions`, the store-agnostic Service Bus consumer. The code the hosts
+  share lives in `src/shared/` and is *linked* into whichever host shipped, so it is not a project
+  and gets no solution entry of its own.
+- **Events, on every store,** needs `#:package Aspire.Hosting.Azure.ServiceBus@13.5.1` and
+  `#:package Aspire.Hosting.Azure.Functions@13.5.1` added at `<<addon-packages>>`, even though the
+  local transport is the default — both branches of the `Events:Transport` switch are compiled. The
+  wiring file you were handed has the exact lines; follow it rather than this summary.
 - **Blazor with `--web true`** needs `Cors:AllowedOrigins` populated in the API's `appsettings.json`.
   The WebAssembly host is the only client that is genuinely cross-origin.
 
@@ -149,13 +171,15 @@ apply:
   Web App's origin reaches the API's CORS only on a **second** `terraform apply` — the shipped
   workflow does it automatically, by hand it is one line in the tfvars.
 
-**Delete `.scaffold/` when every wiring file has been applied.** It is scaffolding, not source.
+**No `.scaffold/` directory reaches the scaffold.** The CLI instantiates each add-on in a temp
+directory and copies everything but `.scaffold/` across, so there is nothing to delete.
 
 ---
 
 ## Phase 4 — Generate the docs
 
-The scaffold ships no `README.md`, and its solution file already lists one. Write both files
+The scaffold ships no `README.md`, and its solution file does not list one. Once it is written, add
+`<File Path="README.md" />` to the `/Solution Items/` folder of `<Name>.slnx`. Write both files
 describing **only** what was actually generated — never the options that were not chosen.
 
 `README.md`:
@@ -233,15 +257,55 @@ describing **only** what was actually generated — never the options that were 
   *(always)*
 - The Blazor WebAssembly origin reaches the API's CORS on a **second** `terraform apply`; skipped, the
   API logs healthy 200s while the browser blocks everything. *(Blazor web)*
-- The Service Bus namespace is provisioned but idle unless the event store is Polecat — only that
-  host reads `Events:Transport`. *(Events on Marten or Fisher)*
 
 Do **not** copy the template workspace's own `CLAUDE.md`. Most of it — the templating status, the
 `specs/` section, the `base-project/` path convention — is meaningless in a scaffold.
 
 ---
 
-## Phase 5 — Verify, then report
+## Phase 5 — Knowledge graph
+
+Every scaffold starts with a [graphify](https://github.com/Graphify-Labs/graphify) knowledge graph,
+so a later session can run `graphify query` instead of grepping. This runs after Phase 4 on purpose:
+`graphify install --project` appends its own section to the `CLAUDE.md` you just wrote. Do not ask
+about it; it is not an interview question. From `<Dir>`:
+
+```bash
+# Only if graphify is not on PATH. The PyPI name has a double y. The terraform extra is what
+# lets IaC/ into the graph; without it every .tf file contributes nothing.
+uv tool install "graphifyy[terraform]"      # or: pipx install "graphifyy[terraform]"
+
+graphify install --project   # .claude/skills/graphify/, a graphify section in CLAUDE.md,
+                             # .claude/CLAUDE.md, and PreToolUse hooks in .claude/settings.json
+graphify update .            # builds graphify-out/: graph.json, GRAPH_REPORT.md, graph.html.
+                             # Code only, local tree-sitter, no LLM and no API key
+```
+
+Then append `graphify-out/` to the scaffold's `.gitignore`. The graph is regenerated, not source.
+
+**Git hooks only if `<Dir>` is already a git repository.** `graphify hook install` fails with
+`No git repository found` otherwise, and the scaffold is often a temp folder that becomes a repo
+later. If `.git` exists, run it: it installs post-commit, post-checkout, post-merge and
+post-rewrite hooks that rebuild the graph, and registers a merge driver for `graph.json` in
+`.gitattributes`. If not, list `graphify hook install` in the report as the follow-up for after
+`git init`. Do not run `git init` to get past this.
+
+Add one line to the README's running section: `graphify update .` rebuilds the graph by hand, and
+`GRAPH_REPORT.md` is the overview.
+
+If neither `uv` nor `pipx` is on `PATH`, skip this phase and say so in the report. The scaffold is
+complete without the graph. Three things to expect, none of them failures:
+
+- `.aspire/apphost.cs` reports a syntax error and contributes no symbols. graphify's C# parser does
+  not understand the `#:` directives of a file-based app. The AppHost is simply absent from the graph.
+- The hooks in `.claude/settings.json` call `graphify`. A clone opened on a machine without it gets
+  a failing hook on each search and read, so the README names graphify as a prerequisite.
+- The docs pass is not run. `/graphify .` inside a session in the scaffold adds the Markdown and
+  READMEs on the session's model. It is the user's call, and it costs tokens.
+
+---
+
+## Phase 6 — Verify, then report
 
 ```bash
 dotnet build <Name>.slnx
@@ -257,8 +321,9 @@ report rather than claiming the infrastructure was verified.
 
 For a React scaffold also run `npm install && npm run build` in `src/ui/react`.
 
-Report what was created, the decisions it encodes, and the verification results **as they actually
-came out**. If something failed, say so with the output rather than describing the scaffold as
+Report what was created, the decisions it encodes, whether the graph was built (node and edge
+counts from `graphify update`, or why Phase 5 was skipped), any open follow-up such as
+`graphify hook install`, and the verification results **as they actually came out**. If something failed, say so with the output rather than describing the scaffold as
 finished. Offer `aspire run` as the next step; do not start it unasked, and note that it needs
 Docker unless the store is SQLite.
 

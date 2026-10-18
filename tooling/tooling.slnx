@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AspireStarter.Cli/AspireStarter.Cli.csproj" />
+  <Project Path="AspireStarter.Cli.Tests/AspireStarter.Cli.Tests.csproj" />
+</Solution>
