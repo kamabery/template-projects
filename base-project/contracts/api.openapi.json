@@ -1,6 +1,38 @@
 {
   "components": {
     "schemas": {
+      "AuthConfig": {
+        "properties": {
+          "authority": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "authority",
+          "clientId",
+          "scope"
+        ],
+        "type": "object"
+      },
       "ClientTelemetryConfig": {
         "properties": {
           "endpoint": {
@@ -179,6 +211,37 @@
         "summary": "List every widget",
         "tags": [
           "Widgets"
+        ]
+      }
+    },
+    "/auth/config": {
+      "get": {
+        "operationId": "GetAuthConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Where a client signs in, or that it does not need to",
+        "tags": [
+          "Auth"
         ]
       }
     },
@@ -428,6 +491,9 @@
     }
   },
   "tags": [
+    {
+      "name": "Auth"
+    },
     {
       "name": "ClientTelemetry"
     },

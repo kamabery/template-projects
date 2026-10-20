@@ -25,6 +25,9 @@ builder.Services.AddOpenApi(options => options.AddSchemaTransformer(NumericUnion
 // need nothing.
 builder.ConfigureCorsBuilder();
 
+// OIDC, off until Auth:Authority is set - then writes need a signed-in user. See AuthConfigurator.
+builder.ConfigureAuthBuilder();
+
 // EF Core over whichever container the AppHost started - see PersistenceConfigurator for why both
 // providers are wired and why the connection string arrives rather than being configured here.
 builder.ConfigurePersistenceBuilder();
@@ -60,6 +63,8 @@ app.UseSwaggerUI(options =>
 app.WarnOnMissingCorsOrigins();
 app.UseCors(CorsConfigurator.WasmClientPolicy);
 
+app.LogAuthMode();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

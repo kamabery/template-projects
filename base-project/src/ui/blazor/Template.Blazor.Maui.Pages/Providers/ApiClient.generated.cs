@@ -37,6 +37,14 @@ namespace Template.Blazor.Maui.Pages.Providers
         [Get("/Widgets")]
         Task<ICollection<Widget>> GetWidgets(CancellationToken cancellationToken = default);
 
+        /// <summary>Where a client signs in, or that it does not need to</summary>
+        /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">Thrown when the request returns a non-success status code.</exception>
+        [Headers("Accept: application/json, text/json, text/plain")]
+        [Get("/auth/config")]
+        Task<AuthConfig> GetAuthConfig(CancellationToken cancellationToken = default);
+
         /// <summary>OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard</summary>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>
@@ -151,6 +159,24 @@ namespace Template.Blazor.Maui.Pages.Providers
     using System = global::System;
 
     
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AuthConfig
+    {
+
+        [JsonPropertyName("authority")]
+        public string Authority { get; set; }
+
+        [JsonPropertyName("clientId")]
+        public string ClientId { get; set; }
+
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; }
+
+        [JsonPropertyName("scope")]
+        public string Scope { get; set; }
+
+    }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class ClientTelemetryConfig
