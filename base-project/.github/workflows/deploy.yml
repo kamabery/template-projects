@@ -22,7 +22,7 @@
 #   TF_CLOUD_ORGANIZATION         variable, the HCP organization
 #
 # Everything else here - the image build, the schema, the front end upload - talks to Azure
-# directly, over OIDC. Three secrets per GitHub environment, no passwords:
+# directly, over OIDC. Three variables per GitHub environment - ids, not secrets - and no passwords:
 #   AZURE_CLIENT_ID         app registration with a federated credential for
 #                           repo:<owner>/<repository>:environment:<GitHub environment>
 #   AZURE_TENANT_ID
@@ -78,9 +78,9 @@ jobs:
 
       - uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
