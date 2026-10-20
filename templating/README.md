@@ -106,7 +106,7 @@ file in rather than by merging into one. That is why no `<<addon->>` marker exis
 
 | Template | Takes |
 | --- | --- |
-| `aspire-base` | all of `IaC/` except the four files below |
+| `aspire-base` | all of `IaC/` except the add-on files below |
 | `aspire-ui-react` | `frontend.react.tf` |
 | `aspire-ui-blazor` | `frontend.blazor-web.tf` (dropped by `template.json` when `--web false`) |
 | `aspire-events` | `containerapp.events.tf`, `servicebus.tf` |

@@ -1,6 +1,6 @@
 ---
 name: enhance-app
-description: Add an AspireStarter add-on - Wolverine event sourcing, a React front end, or a Blazor front end (web and/or MAUI) - to an EXISTING scaffold made from the AspireStarter templates. Drives the aspire-addon CLI, which reads the scaffold's .aspirestarter.json, instantiates the add-on with the same name, resource and data store, and merges it into apphost.cs, the solution, Directory.Packages.props and appsettings.json; then updates the scaffold's README and CLAUDE.md and verifies the build. Use when someone asks to add events, React, Blazor or mobile to a project that already exists. For a brand-new project use boot-strap-app instead.
+description: Add an AspireStarter add-on - Wolverine event sourcing, a React front end, a Blazor front end (web and/or MAUI), or sign-in (Keycloak locally, Entra External ID in Azure) - to an EXISTING scaffold made from the AspireStarter templates. Drives the aspire-addon CLI, which reads the scaffold's .aspirestarter.json, instantiates the add-on with the same name, resource and data store, and merges it into apphost.cs, the solution, Directory.Packages.props and appsettings.json; then updates the scaffold's README and CLAUDE.md and verifies the build. Use when someone asks to add events, React, Blazor, mobile, sign-in or authentication to a project that already exists. For a brand-new project use boot-strap-app instead.
 ---
 
 # Add to an existing Aspire scaffold
@@ -45,6 +45,7 @@ Ask, in **one** `AskUserQuestion` call, only what is not already settled by the 
 | Events | `aspire-addon add events` | nothing — the event store follows the data store (Marten / Polecat / Fisher) and is never a separate choice |
 | React | `aspire-addon add ui-react` | nothing |
 | Blazor | `aspire-addon add ui-blazor --web <true\|false> --maui <true\|false>` | web, mobile (MAUI), or both |
+| Sign-in | `aspire-addon add auth` | nothing — it reads the web front end from the manifest, and refuses without one. Tell the user the External ID tenant is a one-time manual setup before the first deploy (the wiring file's section 4) |
 
 A **second front end is allowed** here, unlike at scaffold time: React and Blazor coexist in the
 template workspace itself. The only file both ship, `docs/DESIGN.md`, is identical and is skipped.
@@ -85,8 +86,8 @@ dotnet build .aspire/apphost.cs             # proves the AppHost wiring compiles
 ```
 
 For React also `npm install && npm run build` in `src/ui/react`. For anything that touched `IaC/`:
-`terraform init -backend=false && terraform validate` inside `IaC/` — it needs Terraform 1.9 or
-newer; if that is not installed, say so rather than claiming the infrastructure was verified.
+`aspire-addon infra check`, then `terraform init -backend=false && terraform validate && terraform test
+-var-file=envs/ephemeral.tfvars` inside `IaC/` — it needs Terraform 1.9 or newer; if that is not installed, say so rather than claiming the infrastructure was verified.
 
 Report what was added, every `AppliedByFallback` edit by name (those are the ones worth a human
 glance), the manual follow-ups still open, and the verification results as they actually came out.

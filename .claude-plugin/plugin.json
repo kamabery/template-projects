@@ -1,12 +1,13 @@
 {
   "name": "aspire-starter",
-  "version": "1.0.0",
-  "description": "boot-strap-app creates a new AspireStarter solution; enhance-app adds events, React or Blazor to an existing one through the aspire-addon CLI.",
+  "version": "1.1.0",
+  "description": "boot-strap-app creates a new AspireStarter solution; enhance-app adds events, React, Blazor or sign-in to an existing one through the aspire-addon CLI; deploy-app makes one deployable through HCP Terraform and gets its ephemeral previews applied.",
   "author": {
     "name": "Kurt Mabery"
   },
   "skills": [
     "./.claude/skills/boot-strap-app",
-    "./.claude/skills/enhance-app"
+    "./.claude/skills/enhance-app",
+    "./.claude/skills/deploy-app"
   ]
 }
