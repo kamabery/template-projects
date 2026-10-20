@@ -9,6 +9,7 @@
  * `npm run api:types` after changing an endpoint. See docs/ADDING-A-RESOURCE.md.
  */
 import type { components } from './api.generated'
+import { authHeaders } from './auth'
 
 /** Generated from the API's OpenAPI document — do not hand-edit the shape. */
 export type Widget = components['schemas']['Widget']
@@ -18,7 +19,7 @@ const API_BASE = '/api'
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     signal,
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', ...(await authHeaders()) },
   })
 
   if (!response.ok) {

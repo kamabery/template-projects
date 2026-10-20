@@ -4,6 +4,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { QueryClient } from '@tanstack/react-query'
 import type { Theme } from '@/store/preferences'
 import { setTheme, useTheme } from '@/store/preferences'
+import { signIn, signOut, useAuth } from '@/lib/auth'
+import { Button } from '@/components/ui/button'
 import { NavBar, NavItem } from '@/components/ui/nav'
 import { ToastProvider } from '@/components/ui/toast'
 
@@ -60,6 +62,25 @@ function ThemeToggle() {
   )
 }
 
+/** Nothing at all unless the API says writes need a signed-in user. */
+function AuthControl() {
+  const { enabled, user } = useAuth()
+  if (!enabled) return null
+
+  return user ? (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-content-muted">{user}</span>
+      <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+        Sign out
+      </Button>
+    </div>
+  ) : (
+    <Button variant="secondary" size="sm" onClick={() => void signIn()}>
+      Sign in
+    </Button>
+  )
+}
+
 function RootLayout() {
   return (
     <ToastProvider>
@@ -76,7 +97,8 @@ function RootLayout() {
               <NavItem to="/styleguide">Style guide</NavItem>
             </NavBar>
 
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3">
+              <AuthControl />
               <ThemeToggle />
             </div>
           </div>
