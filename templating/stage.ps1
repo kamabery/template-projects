@@ -429,7 +429,8 @@ New-Item -ItemType Directory -Path $base -Force | Out-Null
 foreach ($f in @('template.slnx', 'aspire.config.json', 'nuget.config')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $f) -Destination (Join-Path $base $f) -Force
 }
-$n = Copy-Tree -From (Join-Path $RepoRoot '.aspire') -To (Join-Path $base '.aspire')
+# keycloak/ is the auth add-on's realm import, staged with that add-on, never with the base.
+$n = Copy-Tree -From (Join-Path $RepoRoot '.aspire') -To (Join-Path $base '.aspire') -ExcludePrefixes @('keycloak')
 $n += Copy-Tree -From $baseProject -To $base -ExcludePrefixes @(
     'src/ui',
     'tests/Template.Blazor.Maui.Tests',
@@ -458,7 +459,7 @@ Edit-StagedFile -Path (Join-Path $base '.aspire/apphost.cs') -Pairs @(
 )
 
 # React, Blazor and events are separate templates; their regions can never be true here.
-$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEventsMarten', 'includeEventsPolecat', 'includeEventsFisher')
+$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEventsMarten', 'includeEventsPolecat', 'includeEventsFisher', 'includeAuth')
 foreach ($rel in @('template.slnx', '.aspire/apphost.cs', '.aspire/appsettings.json')) {
     Remove-FalseRegions -Path (Join-Path $base $rel) -FalseSymbols $falseForBase
 }
@@ -470,7 +471,11 @@ $n += Copy-Tree -From (Join-Path $RepoRoot 'IaC') -To (Join-Path $base 'IaC') -E
     'frontend.blazor-web.tf',
     'containerapp.events.tf',
     'servicebus.tf',
-    'functions.tf'
+    'functions.tf',
+    'auth.entra-external.tf',
+    'auth.redirects.react.tf',
+    'auth.redirects.blazor-web.tf',
+    'tests/auth.tftest.hcl'
 )
 Assert-TerraformSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 Assert-ResourceTokenSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')

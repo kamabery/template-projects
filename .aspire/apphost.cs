@@ -15,6 +15,9 @@
 #:package Aspire.Hosting.Azure.ServiceBus@13.5.1
 #:package Aspire.Hosting.Azure.Functions@13.5.1
 //#endif
+//#if (includeAuth)
+#:package Aspire.Hosting.Keycloak@13.5.1-preview.1.26420.4
+//#endif
 // <<addon-packages>> - scaffolding inserts add-on #:package directives above this line.
 #:property AspireUseCliBundle=true
 
@@ -131,6 +134,23 @@ else
 }
 
 // <<addon-resources>> - scaffolding inserts add-on resource declarations below this line.
+
+//#if (includeAuth)
+// Keycloak, standing in for the Entra External ID tenant a deployed environment signs in with.
+// The realm in ./keycloak has a public client "spa" (code + PKCE, any localhost redirect) whose
+// access tokens carry aud "spa", and one user, qa / qa. The API only ever sees Auth:*, so it does
+// not know which provider it has - see AuthConfigurator. Port 8080 is pinned because the issuer in
+// a token is the URL the browser used, and the API must be told that same URL.
+var keycloak = builder.AddKeycloak("keycloak", 8080)
+    .WithRealmImport("./keycloak");
+
+api.WithReference(keycloak)
+    .WaitFor(keycloak)
+    .WithEnvironment("Auth__Authority", ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/app"))
+    .WithEnvironment("Auth__Audience", "spa")
+    .WithEnvironment("Auth__ClientId", "spa")
+    .WithEnvironment("Auth__Scope", "openid profile email");
+//#endif
 
 //#if (includeReact)
 // React, on the Vite dev server.

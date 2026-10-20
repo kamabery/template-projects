@@ -17,6 +17,22 @@ mock_provider "azurerm" {
 
 mock_provider "azapi" {}
 
+# Only the auth add-on uses these two; mocking a provider a scaffold never configures is harmless.
+mock_provider "azuread" {
+  mock_data "azuread_service_principal" {
+    defaults = {
+      object_id = "00000000-0000-0000-0000-000000000000"
+      oauth2_permission_scope_ids = {
+        openid         = "00000000-0000-0000-0000-000000000001"
+        profile        = "00000000-0000-0000-0000-000000000002"
+        offline_access = "00000000-0000-0000-0000-000000000003"
+      }
+    }
+  }
+}
+
+mock_provider "msgraph" {}
+
 variables {
   project_name = "shelf"
   environment  = "j012"
@@ -24,6 +40,12 @@ variables {
   # The live workspace carries every add-on at once, and the events one refuses to plan without
   # this. In a scaffold without events it only adds an eventstore database to a mock.
   include_events = true
+
+  # Likewise the auth add-on, which refuses to plan without its External tenant. A scaffold
+  # without auth does not declare these.
+  entra_external_tenant_id    = "00000000-0000-0000-0000-000000000000"
+  entra_external_subdomain    = "shelfqa"
+  entra_external_user_flow_id = "00000000-0000-0000-0000-000000000000"
 }
 
 run "named_for_the_job" {

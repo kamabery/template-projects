@@ -98,6 +98,8 @@ resource "azurerm_container_app" "api" {
         }
       }
 
+      # <<addon-api-env>> - scaffolding inserts add-on environment variables below this line.
+
       dynamic "volume_mounts" {
         for_each = module.database.volume_mounts
 

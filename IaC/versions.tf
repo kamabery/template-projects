@@ -23,5 +23,18 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+
+    # Used only by the auth add-on (auth.entra-external.tf). Declared here because a module may
+    # have only one required_providers block; without that add-on they are downloaded and never
+    # configured.
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.10"
+    }
+
+    msgraph = {
+      source  = "microsoft/msgraph"
+      version = "~> 0.6"
+    }
   }
 }

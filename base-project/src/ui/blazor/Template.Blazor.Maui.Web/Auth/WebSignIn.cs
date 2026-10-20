@@ -34,7 +34,14 @@ public sealed class WebSignIn : ISignIn, IDisposable
 
     public Task SignInAsync()
     {
-        _navigation.NavigateToLogin("authentication/login");
+        // Back to where the user was - unless that was one of the authentication pages themselves,
+        // such as "You are logged out", which is no place to land after signing in.
+        var here = _navigation.ToBaseRelativePath(_navigation.Uri);
+        _navigation.NavigateToLogin("authentication/login", new InteractiveRequestOptions
+        {
+            Interaction = InteractionType.SignIn,
+            ReturnUrl = here.StartsWith("authentication/", StringComparison.Ordinal) ? _navigation.BaseUri : _navigation.Uri,
+        });
         return Task.CompletedTask;
     }
 
