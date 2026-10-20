@@ -3,8 +3,8 @@
 # secret value - and therefore none is written into Terraform state as an app setting.
 #
 # The generated password itself IS in state, because Terraform generated it. That is the honest
-# limit of this arrangement, and the reason the state account the bootstrap module creates has
-# public access disabled.
+# limit of this arrangement, and the reason state lives in HCP Terraform, encrypted at rest and
+# readable only by the workspace's team (see backend.tf).
 
 resource "azurerm_key_vault" "main" {
   name                = local.key_vault_name

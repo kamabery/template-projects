@@ -35,19 +35,29 @@ resource group
 | **Front end to API** | A scaffold has one front end. React's Static Web App **links** the API container app as a backend, so the browser calls a same-origin `/api` — the same shape Vite's proxy gives in development. Blazor WebAssembly instead calls the API's own address cross-origin, which is also what it does in development, and is why it is the one client that needs CORS. Each deployed front end therefore reaches the API the same way it does locally. |
 | **Network** | Public endpoints with firewall rules. No VNet, no private endpoints, no private DNS. Cheap, fast to apply, and reachable from a laptop — which is what a scaffold should be. Moving to private networking is a real change, not a flag. |
 | **Identity** | One user-assigned managed identity, granted `AcrPull`, `Key Vault Secrets User`, `Azure Service Bus Data Owner` and, on the Functions storage account, `Storage Blob Data Owner`. Database credentials are generated here, stored in Key Vault, and referenced by the container apps by URI. No credential is an app setting. |
-| **State** | Local by default so `terraform init` works immediately. `bootstrap/` creates the remote state account when a second person needs it; `backend.tf` is four lines of uncommenting away. |
-| **Environments** | `envs/*.tfvars`, not workspaces. |
+| **State** | HCP Terraform. `backend.tf` is an empty `cloud {}` block; the organization, project and workspace come from `TF_CLOUD_ORGANIZATION`, `TF_CLOUD_PROJECT` and `TF_WORKSPACE`, so nothing about who runs it is baked into a scaffold. Runs execute in HCP with dynamic Azure credentials. A gitignored `backend_override.tf` with `backend "local" {}` gives local state for experiments. |
+| **Environments** | `envs/dev.tfvars` and `envs/staging.tfvars`, plus `envs/ephemeral.tfvars` for a factory job's preview (`environment = j<NNN>`, scale to zero, tagged `ephemeral`). One HCP workspace per environment, `<repository>-<environment>`. **No production**: `variables.tf` refuses `prod`, and nothing here deploys one. |
+| **Deploying** | `.github/workflows/deploy.yml`, dispatch only. Merging to `main` deploys nothing; dev and staging are ready and wait for a person to run them. |
 | **Messaging** | Deployed, the events service publishes `WidgetCompletedV1` to Service Bus on every event store (`events_transport` defaults to `azureservicebus`), through its own outbox. The **only** consumer is an Azure Function on **Flex Consumption**: target-based scaling divides the queue length by `maxConcurrentCalls` in the project's `host.json`, up to `functions_max_instances`, and scales to zero when the queue is empty. The events service keeps `min_replicas = 1` for its projection daemon; the consumer does not inherit that. It reaches its storage and the namespace with the same managed identity, so there is no connection string anywhere. |
 
 ## Apply it
 
+Normally the deploy workflow does this. By hand:
+
 ```bash
-az login
-az account set --subscription <id>
+az login                                   # for the image build and schema steps below
+terraform login                            # HCP Terraform
+
+export TF_CLOUD_ORGANIZATION=<org>
+export TF_CLOUD_PROJECT=<repository>
+export TF_WORKSPACE=<repository>-dev
 
 terraform init
 terraform apply -var-file=envs/dev.tfvars
 ```
+
+`terraform test -var-file=envs/ephemeral.tfvars` (after `terraform init -backend=false`) checks
+the ephemeral contract offline, with every provider mocked.
 
 The first apply runs a public placeholder image, because nothing has been pushed to the registry
 yet. Then build and push, and apply again with a tag:

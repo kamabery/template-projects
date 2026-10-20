@@ -4,13 +4,20 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment discriminator - dev, test, prod. Part of every resource name, so keep it short."
+  description = "Environment discriminator - dev, staging, or j<NNN> for one factory job's ephemeral preview. Part of every resource name, so keep it short."
   type        = string
   default     = "dev"
 
   validation {
     condition     = can(regex("^[a-z0-9]{1,8}$", var.environment))
     error_message = "environment must be 1-8 lowercase letters or digits."
+  }
+
+  # Production is out of scope for this pipeline. Refusing it here means no tfvars, workflow input
+  # or typo can plan one.
+  validation {
+    condition     = !contains(["prod", "production", "prd"], var.environment)
+    error_message = "Production is not deployed from here."
   }
 }
 

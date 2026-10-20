@@ -8,12 +8,27 @@
 # Blazor front ends, a glob for the events service - so the same file works whether or not those
 # were scaffolded. Nothing here needs editing when one is added later.
 #
-# Authentication is OIDC. Three repository secrets, no passwords:
-#   AZURE_CLIENT_ID         app registration with a federated credential for this repository
+# Dispatch only. Nothing deploys on a push: merging leaves dev and staging ready to deploy, and a
+# person (or the factory, for a preview) decides when. Production is not deployed from here at all,
+# and variables.tf refuses it as well.
+#
+#   environment = dev | staging   envs/<environment>.tfvars, GitHub environment of the same name
+#   environment = j<NNN>          one factory job's ephemeral preview: envs/ephemeral.tfvars,
+#                                 GitHub environment "preview", dispatched on the job's branch
+#
+# Terraform runs in HCP Terraform, workspace <repository>-<environment> in project <repository>.
+# HCP holds the Azure credentials (dynamic provider credentials), so Terraform needs only:
+#   TF_API_TOKEN                  secret, an HCP team token scoped to this repository's project
+#   TF_CLOUD_ORGANIZATION         variable, the HCP organization
+#
+# Everything else here - the image build, the schema, the front end upload - talks to Azure
+# directly, over OIDC. Three secrets per GitHub environment, no passwords:
+#   AZURE_CLIENT_ID         app registration with a federated credential for
+#                           repo:<owner>/<repository>:environment:<GitHub environment>
 #   AZURE_TENANT_ID
 #   AZURE_SUBSCRIPTION_ID
-# That app registration needs Contributor *and* User Access Administrator on the subscription - the
-# second because Terraform creates role assignments, which Contributor alone cannot do.
+# That app registration needs AcrPush and, for the schema step, Key Vault Secrets User and the
+# database firewall rights. Role assignments are made by Terraform in HCP, not by it.
 
 name: deploy
 
@@ -21,33 +36,44 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: Which envs/*.tfvars to apply
+        description: dev, staging, or j<NNN> for a factory job's ephemeral preview
         type: string
         default: dev
-  push:
-    branches: [main]
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  # Terraform state does not tolerate two applies at once, and local state cannot even lock.
-  group: deploy-${{ github.ref }}
+  # One apply per environment at a time. HCP locks the workspace too; this keeps the queue here.
+  group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 env:
-  TF_ENV: ${{ inputs.environment || 'dev' }}
+  TF_ENV: ${{ inputs.environment }}
+  TF_VARS: ${{ startsWith(inputs.environment, 'j') && 'ephemeral' || inputs.environment }}
   IMAGE_TAG: ${{ github.sha }}
+  TF_CLOUD_ORGANIZATION: ${{ vars.TF_CLOUD_ORGANIZATION }}
+  TF_CLOUD_PROJECT: ${{ github.event.repository.name }}
+  TF_WORKSPACE: ${{ github.event.repository.name }}-${{ inputs.environment }}
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ startsWith(inputs.environment, 'j') && 'preview' || inputs.environment }}
     defaults:
       run:
         shell: bash
 
     steps:
+      - name: refuse anything but dev, staging or a job preview
+        run: |
+          if ! [[ "$TF_ENV" =~ ^(dev|staging|j[0-9]{1,7})$ ]]; then
+            echo "::error::environment must be dev, staging or j<NNN>; got '$TF_ENV'"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: azure/login@v2
@@ -77,7 +103,8 @@ jobs:
         working-directory: IaC
         run: |
           terraform apply -auto-approve \
-            -var-file="envs/${TF_ENV}.tfvars" \
+            -var-file="envs/${TF_VARS}.tfvars" \
+            -var="environment=${TF_ENV}" \
             -target=azurerm_container_registry.main \
             -target=module.database
 
@@ -176,7 +203,8 @@ jobs:
         working-directory: IaC
         run: |
           terraform apply -auto-approve \
-            -var-file="envs/${TF_ENV}.tfvars" \
+            -var-file="envs/${TF_VARS}.tfvars" \
+            -var="environment=${TF_ENV}" \
             -var="image_tag=${IMAGE_TAG}"
 
       # The Blazor WebAssembly host is genuinely cross-origin, and its Static Web App's hostname
@@ -194,7 +222,8 @@ jobs:
             exit 0
           fi
           terraform apply -auto-approve \
-            -var-file="envs/${TF_ENV}.tfvars" \
+            -var-file="envs/${TF_VARS}.tfvars" \
+            -var="environment=${TF_ENV}" \
             -var="image_tag=${IMAGE_TAG}" \
             -var="cors_allowed_origins=[\"${blazor_url}\"]"
 
@@ -263,3 +292,16 @@ jobs:
               az sql server firewall-rule delete \
                 --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner || true ;;
           esac
+
+      # Where it landed. The factory reads the same outputs from HCP; this is for a person looking
+      # at the run.
+      - name: summary
+        working-directory: IaC
+        run: |
+          {
+            echo "### ${TF_WORKSPACE}"
+            for name in react_url blazor_web_url api_url; do
+              url=$(terraform output -raw "$name" 2>/dev/null || true)
+              [ -n "$url" ] && echo "- ${name}: ${url}"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
