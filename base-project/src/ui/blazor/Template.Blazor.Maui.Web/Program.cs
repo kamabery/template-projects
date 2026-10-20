@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Template.Blazor.Maui.Pages.Auth;
 using Template.Blazor.Maui.Pages.Mvvm;
 using Template.Blazor.Maui.Pages.Telemetry;
 using Template.Blazor.Maui.Web;
+using Template.Blazor.Maui.Web.Auth;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -19,7 +21,30 @@ builder.Services.AddSharedViewModels();
 var apiBaseAddress = builder.Configuration["ApiBaseAddress"]
     ?? throw new InvalidOperationException("ApiBaseAddress is missing from wwwroot/appsettings.json.");
 
-builder.Services.AddSharedProviders(new Uri(apiBaseAddress));
+// Sign-in only when the API asks for it (GET /auth/config). Registered before AddSharedProviders,
+// which otherwise registers SignInOff for the layout. Scopes come from the API too, so the access
+// token's audience is whatever that environment's API expects.
+var auth = await AuthSettings.FetchAsync(new Uri(apiBaseAddress));
+if (auth.Enabled)
+{
+    builder.Services.AddOidcAuthentication(options =>
+    {
+        options.ProviderOptions.Authority = auth.Authority;
+        options.ProviderOptions.ClientId = auth.ClientId;
+        options.ProviderOptions.ResponseType = "code";
+        options.ProviderOptions.DefaultScopes.Clear();
+        foreach (var scope in (auth.Scope ?? "openid profile").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            options.ProviderOptions.DefaultScopes.Add(scope);
+        }
+    });
+    builder.Services.AddScoped<ISignIn, WebSignIn>();
+    builder.Services.AddTransient<OptionalBearerHandler>();
+}
+
+builder.Services.AddSharedProviders(
+    new Uri(apiBaseAddress),
+    api => { if (auth.Enabled) api.AddHttpMessageHandler<OptionalBearerHandler>(); });
 
 // Client-side RUM. A browser has no environment for the AppHost to inject OTEL_* into and this
 // host's wwwroot/appsettings.json is a static file that cannot carry the dashboard's per-run API

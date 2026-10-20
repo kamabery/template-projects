@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Refit;
+using Template.Blazor.Maui.Pages.Auth;
 using Template.Blazor.Maui.Pages.Providers;
 using Template.Blazor.Maui.Pages.ViewModels;
 
@@ -35,14 +37,26 @@ public static class MvvmServiceCollectionExtensions
     /// <paramref name="apiBaseAddress"/>. Each host supplies its own address: the WASM host reads it
     /// from wwwroot/appsettings.json, the MAUI host from its embedded appsettings.json.
     /// </summary>
-    public static IServiceCollection AddSharedProviders(this IServiceCollection services, Uri apiBaseAddress)
+    /// <param name="configureApi">Lets a host add to the API client's pipeline - the WebAssembly host
+    /// puts its bearer-token handler here when sign-in is on.</param>
+    /// <remarks>
+    /// Also registers <see cref="SignInOff"/> as <see cref="ISignIn"/> unless the host registered
+    /// its own first, so the layout always has one to ask.
+    /// </remarks>
+    public static IServiceCollection AddSharedProviders(
+        this IServiceCollection services, Uri apiBaseAddress, Action<IHttpClientBuilder>? configureApi = null)
     {
         ArgumentNullException.ThrowIfNull(apiBaseAddress);
 
-        services
+        var api = services
             .AddRefitClient<IApi>()
-            .ConfigureHttpClient(client => client.BaseAddress = apiBaseAddress)
-            .AddStandardResilienceHandler();
+            .ConfigureHttpClient(client => client.BaseAddress = apiBaseAddress);
+        api.AddStandardResilienceHandler();
+
+        // After the resilience handler, so inside it: a retried request asks for its token again.
+        configureApi?.Invoke(api);
+
+        services.TryAddScoped<ISignIn, SignInOff>();
 
         return services;
     }

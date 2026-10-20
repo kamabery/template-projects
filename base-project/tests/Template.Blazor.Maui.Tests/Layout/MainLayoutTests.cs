@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Template.Blazor.Maui.Pages.Auth;
 using Template.Blazor.Maui.Pages.Layout;
 using Template.Blazor.Maui.Pages.Telemetry;
 using Template.Blazor.Maui.Tests.Infrastructure;
@@ -19,9 +20,20 @@ namespace Template.Blazor.Maui.Tests.Layout;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public sealed class MainLayoutTests : FluentUiTestContext
 {
-    public MainLayoutTests() =>
+    public MainLayoutTests()
+    {
         Services.AddSingleton(services =>
             new NavigationTelemetry(services.GetRequiredService<NavigationManager>()));
+        Services.AddScoped<ISignIn, SignInOff>();
+    }
+
+    [Fact]
+    public void Render_PutsTheSignInControlInTheHeader()
+    {
+        var component = Render<MainLayout>();
+
+        component.FindComponents<SignInControl>().Count.ShouldBe(1);
+    }
 
     [Fact]
     public void Render_MountsTheDialogProvider()
