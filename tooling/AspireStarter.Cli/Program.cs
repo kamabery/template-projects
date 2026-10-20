@@ -4,7 +4,7 @@ using AspireStarter.Cli.Templates;
 const string Usage = """
     aspire-addon - add AspireStarter add-ons to an existing AspireStarter scaffold.
 
-      aspire-addon add <events|ui-react|ui-blazor> [--web true|false] [--maui true|false] [--dry-run] [--json] [--path <dir>]
+      aspire-addon add <events|ui-react|ui-blazor|auth> [--web true|false] [--maui true|false] [--dry-run] [--json] [--path <dir>]
       aspire-addon adopt [--name <Name>] [--resource <Resource>] [--db-provider <postgres|sqlserver|sqlite>] [--path <dir>]
       aspire-addon status [--path <dir>]
       aspire-addon infra check [--json] [--path <dir>]

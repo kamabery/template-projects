@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "template-projects",
+  "classifications": [
+    "Aspire",
+    "Auth",
+    "Keycloak",
+    "Entra"
+  ],
+  "identity": "AspireStarter.Auth",
+  "groupIdentity": "AspireStarter.Auth",
+  "name": "Aspire starter add-on: sign-in (Keycloak locally, Entra External ID in Azure)",
+  "description": "Adds an identity provider to a scaffold created with aspire-base and a web front end: Keycloak under the AppHost, and an Entra External ID app registration and QA user per deployed environment. The API and front ends already speak OIDC once Auth:* is set; this supplies the provider and the settings. Emits .scaffold/aspire-auth.wiring.md, which lists the AppHost and containerapp.api.tf edits the scaffolding skill applies.",
+  "shortName": "aspire-auth",
+  "sourceName": "template",
+  "preferNameDirectory": false,
+  "defaultName": "AspireApp",
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "symbols": {
+    "resource": {
+      "type": "parameter",
+      "datatype": "string",
+      "displayName": "Resource name",
+      "description": "Accepted for symmetry with the other templates, so every template in a scaffold takes the same -n and --resource. Nothing in this add-on is named from it.",
+      "defaultValue": "Widget",
+      "replaces": "Widget"
+    },
+    "frontend": {
+      "type": "parameter",
+      "datatype": "choice",
+      "displayName": "Web front end",
+      "description": "Which web front end Entra External ID redirects back to. aspire-addon passes the one the scaffold has.",
+      "choices": [
+        { "choice": "react", "description": "The React front end (aspire-ui-react)." },
+        { "choice": "blazor-web", "description": "The Blazor WebAssembly host (aspire-ui-blazor --web true)." }
+      ],
+      "defaultValue": "react"
+    }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "condition": "(frontend != \"react\")",
+          "exclude": [
+            "IaC/auth.redirects.react.tf"
+          ]
+        },
+        {
+          "condition": "(frontend != \"blazor-web\")",
+          "exclude": [
+            "IaC/auth.redirects.blazor-web.tf"
+          ]
+        }
+      ]
+    }
+  ]
+}
