@@ -7,6 +7,8 @@ const string Usage = """
       aspire-addon add <events|ui-react|ui-blazor> [--web true|false] [--maui true|false] [--dry-run] [--json] [--path <dir>]
       aspire-addon adopt [--name <Name>] [--resource <Resource>] [--db-provider <postgres|sqlserver|sqlite>] [--path <dir>]
       aspire-addon status [--path <dir>]
+      aspire-addon infra check [--json] [--path <dir>]
+      aspire-addon infra adopt [--path <dir>]
     """;
 
 if (args.Length == 0)
@@ -39,6 +41,8 @@ return args[0] switch
     "adopt" => new AdoptCommand(runner, Console.Out).Run(new AdoptOptions(
         path, options.GetValueOrDefault("--name"), options.GetValueOrDefault("--resource"), options.GetValueOrDefault("--db-provider"))),
     "status" => new StatusCommand(Console.Out).Run(path),
+    "infra" when positional is ["check"] => new InfraCommand(runner, Console.Out).Check(path, flags.Contains("--json")),
+    "infra" when positional is ["adopt"] => new InfraCommand(runner, Console.Out).Adopt(path),
     _ => PrintUsage(),
 };
 

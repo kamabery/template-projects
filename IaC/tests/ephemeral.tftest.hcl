@@ -60,5 +60,5 @@ run "production_is_refused" {
     environment = "prod"
   }
 
-  expect_failures = [var.environment]
+  expect_failures = [terraform_data.no_production]
 }
