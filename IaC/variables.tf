@@ -56,6 +56,12 @@ variable "cors_allowed_origins" {
   default     = []
 }
 
+variable "deployer_object_id" {
+  description = "Object id of the identity the deploy workflow signs in to Azure as (the factory's GitHub Actions app). It gets Key Vault Secrets User on this environment's vault, so the schema step can read the connection string. Set on the HCP variable set by setup-azure.ps1; null for a developer's own apply."
+  type        = string
+  default     = null
+}
+
 variable "db_allowed_ip_ranges" {
   description = "Extra client IPs allowed through the database firewall, as start/end pairs. The database already allows Azure services, which covers the container apps; this is for running `dotnet ef database update` from a laptop or a CI runner."
   type = list(object({

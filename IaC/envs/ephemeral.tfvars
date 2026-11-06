@@ -1,5 +1,7 @@
 project_name = "template"
-location     = "eastus2"
+# eastus2 refused B_Standard_B1ms for the factory's subscription (SkuNotAvailable, J-019); centralus
+# also offers Static Web Apps. dev and staging stay where the human put them.
+location = "centralus"
 
 # One factory job's preview. The workflow passes -var environment=j<NNN> (the job id), which names
 # the resource group and the HCP workspace after it; nothing here names an environment.

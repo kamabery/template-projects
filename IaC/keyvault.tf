@@ -37,3 +37,13 @@ resource "azurerm_role_assignment" "kv_secrets_officer" {
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+# The deploy workflow reads the connection string for its schema step. It signs in as a different
+# identity from Terraform's, and its subscription Contributor role stops at the control plane, so
+# without this the step is ForbiddenByRbac. Scoped to this vault, and destroyed with it.
+resource "azurerm_role_assignment" "kv_secrets_deployer" {
+  count                = var.deployer_object_id == null ? 0 : 1
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.deployer_object_id
+}

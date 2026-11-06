@@ -95,6 +95,15 @@ jobs:
         working-directory: IaC
         run: terraform init
 
+      # Runs queued through HCP's API - a teardown, and the workspace's auto-destroy timer - get no
+      # -var flags, only the configuration the last apply uploaded. This file goes up with every
+      # apply below, so those runs see this environment's variables too; without it a destroy fails
+      # on "project_name is not set" and the preview is never torn down. Gitignored, never committed.
+      - name: record this environment's variables for API-queued runs
+        working-directory: IaC
+        run: |
+          { cat "envs/${TF_VARS}.tfvars"; echo; echo "environment = \"${TF_ENV}\""; } > zz-env.auto.tfvars
+
       # The registry and the database first, on their own. The images cannot be built before the
       # registry exists and the schema cannot be applied before the database does - but the
       # container apps must not be created until there is an image for them to pull. -target is the
@@ -106,7 +115,8 @@ jobs:
             -var-file="envs/${TF_VARS}.tfvars" \
             -var="environment=${TF_ENV}" \
             -target=azurerm_container_registry.main \
-            -target=module.database
+            -target=module.database \
+            -target=azurerm_role_assignment.kv_secrets_deployer
 
       - name: read outputs
         working-directory: IaC
@@ -151,13 +161,23 @@ jobs:
           case "$DB_PROVIDER" in
             postgres)
               az postgres flexible-server firewall-rule create \
-                --resource-group "$RG_NAME" --name "$DB_SERVER" --rule-name gha-runner \
+                --resource-group "$RG_NAME" --server-name "$DB_SERVER" --name gha-runner \
                 --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
             sqlserver)
               az sql server firewall-rule create \
                 --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner \
                 --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
           esac
+
+      # Sign in again. GitHub's OIDC token lives five minutes, and az presents it again whenever it
+      # needs a token for a new resource - Key Vault here, Storage for the SQLite seed. The registry
+      # and database apply above takes longer than that, so without this the schema step fails with
+      # AADSTS700024 ("Client assertion is not within its valid time range").
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       # Migrations are Development-only inside the application, deliberately: a deployment must not
       # apply an unreviewed schema change, and concurrent replicas would race. This is the step that
@@ -168,8 +188,17 @@ jobs:
           set -euo pipefail
           dotnet tool install --global dotnet-ef --version "10.*" \
             || dotnet tool update --global dotnet-ef --version "10.*"
-          conn=$(az keyvault secret show --vault-name "$KV_NAME" \
-                   --name appdb-connection --query value -o tsv)
+          # The deployer's Secrets User role (kv_secrets_deployer) was created minutes ago, and Azure
+          # RBAC can take a few more to reach the vault: retry for up to five minutes.
+          for i in $(seq 1 20); do
+            conn=$(az keyvault secret show --vault-name "$KV_NAME" \
+                     --name appdb-connection --query value -o tsv 2>/dev/null) && break
+            echo "waiting for the Key Vault role to propagate ($i/20)"; sleep 15
+          done
+          [ -n "${conn:-}" ] || { echo "::error::cannot read appdb-connection from $KV_NAME as the deployer identity"; exit 1; }
+          # dotnet ef builds but never restores (NETSDK1004 on a fresh runner).
+          dotnet restore "$(ls -d src/*.api.migrations.* | head -1)"
+          dotnet restore "$(ls -d src/*.api | head -1)"
           dotnet ef database update \
             --project "$(ls -d src/*.api.migrations.* | head -1)" \
             --startup-project "$(ls -d src/*.api | head -1)" \
@@ -192,6 +221,8 @@ jobs:
           fi
           dotnet tool install --global dotnet-ef --version "10.*" \
             || dotnet tool update --global dotnet-ef --version "10.*"
+          dotnet restore "$(ls -d src/*.api.migrations.* | head -1)"
+          dotnet restore "$(ls -d src/*.api | head -1)"
           dotnet ef database update \
             --project "$(ls -d src/*.api.migrations.* | head -1)" \
             --startup-project "$(ls -d src/*.api | head -1)" \
@@ -287,7 +318,7 @@ jobs:
           case "$DB_PROVIDER" in
             postgres)
               az postgres flexible-server firewall-rule delete --yes \
-                --resource-group "$RG_NAME" --name "$DB_SERVER" --rule-name gha-runner || true ;;
+                --resource-group "$RG_NAME" --server-name "$DB_SERVER" --name gha-runner || true ;;
             sqlserver)
               az sql server firewall-rule delete \
                 --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner || true ;;

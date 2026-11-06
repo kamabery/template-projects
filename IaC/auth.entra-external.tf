@@ -36,17 +36,7 @@ variable "entra_external_user_flow_id" {
   default     = null
 }
 
-# HCP sets this itself when dynamic credentials are on; it is declared so the aliased credentials
-# can be read. Null outside HCP, which only an offline `terraform test` ever is.
-variable "tfc_azure_dynamic_credentials" {
-  description = "Set by HCP Terraform. Do not set by hand."
-  type = object({
-    default = object({ client_id_file_path = string, oidc_token_file_path = string })
-    aliases = map(object({ client_id_file_path = string, oidc_token_file_path = string }))
-  })
-  default = null
-}
-
+# var.tfc_azure_dynamic_credentials is declared in providers.tf.
 locals {
   external_credentials = try(var.tfc_azure_dynamic_credentials.aliases["EXTERNAL"], null)
 

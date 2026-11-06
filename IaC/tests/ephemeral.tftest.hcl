@@ -75,6 +75,30 @@ run "scales_to_zero" {
   }
 }
 
+# Azure adds a "Failure Anomalies" alert rule to Application Insights minutes after the apply, outside
+# the state, and azurerm refuses to delete a resource group that still holds anything (canary-8).
+run "preview_destroy_takes_what_azure_added" {
+  command = plan
+
+  assert {
+    condition     = local.delete_unmanaged_resources == true
+    error_message = "A j<NNN> preview's destroy must delete the resource group with what Azure added to it."
+  }
+}
+
+run "dev_keeps_the_nested_resource_guard" {
+  command = plan
+
+  variables {
+    environment = "dev"
+  }
+
+  assert {
+    condition     = local.delete_unmanaged_resources == false
+    error_message = "dev and staging keep azurerm's refusal to delete a resource group that is not empty."
+  }
+}
+
 run "production_is_refused" {
   command = plan
 
@@ -83,4 +107,33 @@ run "production_is_refused" {
   }
 
   expect_failures = [terraform_data.no_production]
+}
+
+# The workflow's schema step reads the connection string as the GitHub Actions identity, whose
+# subscription Contributor role does not reach a vault's data plane (canary-4: ForbiddenByRbac).
+run "deployer_reads_the_secrets" {
+  command = plan
+
+  variables {
+    deployer_object_id = "11111111-1111-1111-1111-111111111111"
+  }
+
+  assert {
+    condition     = one(azurerm_role_assignment.kv_secrets_deployer[*].principal_id) == "11111111-1111-1111-1111-111111111111"
+    error_message = "The deployer identity must get Key Vault Secrets User on the environment's own vault."
+  }
+
+  assert {
+    condition     = one(azurerm_role_assignment.kv_secrets_deployer[*].role_definition_name) == "Key Vault Secrets User"
+    error_message = "The deployer reads secrets; it never writes them."
+  }
+}
+
+run "no_deployer_no_grant" {
+  command = plan
+
+  assert {
+    condition     = length(azurerm_role_assignment.kv_secrets_deployer) == 0
+    error_message = "Without deployer_object_id (a developer's own apply) there is nobody to grant."
+  }
 }

@@ -97,10 +97,34 @@ swa deploy src/ui/react/dist --deployment-token "$(terraform output -raw react_a
 
 ## Things that will bite you
 
-- **Do not point a container app probe at `/health`.** `MapDefaultEndpoints()` maps `/health` and
-  `/alive` in Development only, and these containers run as Production. The probes here use
-  `/openapi/v1.json`, which `Program.cs` maps unconditionally. A `/health` probe fails every
-  revision and the dashboard blames the image.
+- **The linked backend keeps the `/api` prefix; Vite's proxy and Aspire's YARP strip it.** The
+  Static Web App forwards `/api/Widgets` to the container app as `/api/Widgets`, so `Program.cs`
+  calls `app.UsePathBase("/api")` (then `app.UseRouting()`) to serve every route both ways. Linking
+  also puts the API behind the Static Web App's auth: its own `api_url` answers 401 (or 400) to
+  everyone else, so smoke-test it through `<react_url>/api/...`. A Blazor scaffold's API has no
+  linked backend and stays directly reachable.
+- **Azure adds to the resource group behind Terraform's back.** Minutes after Application Insights
+  is created, Azure gives it a `Failure Anomalies` smart-detector alert rule that is not in the
+  state, and azurerm refuses to delete a resource group that still holds anything. `providers.tf`
+  lets a `j<NNN>` preview's destroy take it; dev and staging keep the refusal, so destroying one of
+  those means deleting that rule first.
+- **Do not point a container app probe at `/health`.** `MapDefaultEndpoints()` maps `/health` in
+  every environment (the factory's smoke check reads it) but `/alive` in Development only, and
+  `/health` includes the database check, so a probe on it restarts a healthy container whenever the
+  database blips. The probes here use `/openapi/v1.json`, which `Program.cs` maps unconditionally.
+  Scaffolds older than 2026-10-24 map `/health` in Development only, where a `/health` probe fails
+  every revision and the dashboard blames the image.
+- **With more than one dynamic-credential configuration, HCP stops configuring the providers.** The
+  factory's variable set carries a tagged `EXTERNAL` configuration for the auth add-on, and that
+  puts every project in HCP's multiple-configuration mode, with or without the add-on. Each provider
+  must then say `use_oidc` and read its token and client id from `var.tfc_azure_dynamic_credentials`,
+  as `providers.tf` does for `azurerm` and `azapi`. Leave that out and azurerm falls back to the
+  Azure CLI, which HCP's runners do not have: `exec: "az": executable file not found in $PATH`.
+  Offline `terraform test` cannot catch this; only a real HCP run can.
+- **New GitHub repos present an immutable OIDC subject.** `azure/login` sends
+  `repo:<owner>@<id>/<name>@<id>:environment:preview`, not `repo:<owner>/<name>:...`, and a
+  federated credential for the plain form fails with `AADSTS700213`. Read the repo's format from
+  `GET /repos/<o>/<n>/actions/oidc/customization/sub` (`sub_claim_prefix`) before registering one.
 - **The Blazor WebAssembly front end needs a second apply.** `containerapp.api.tf` is part of the
   base scaffold and cannot reference a resource declared in an add-on file, so the Static Web App's
   hostname reaches `Cors:AllowedOrigins` only after it exists. Apply, copy `blazor_web_url` into
