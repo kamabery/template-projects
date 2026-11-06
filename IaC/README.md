@@ -95,6 +95,22 @@ npm --prefix src/ui/react run build
 swa deploy src/ui/react/dist --deployment-token "$(terraform output -raw react_api_key)" --env production
 ```
 
+## On the platform
+
+A `j<NNN>` preview runs on the factory's shared platform when the HCP variable set carries `platform`
+(the factory's `setup-platform.ps1` puts it there) and the preview is in the platform's region. It then
+creates no Container Apps environment, Log Analytics workspace, Key Vault or database server, which is
+most of what makes a preview slow. dev, staging and `use_platform = false` keep a full stack.
+
+- What must be unique there carries the preview's id: container apps (`ca-<name>-<env>-api`), secrets
+  (`<name>-<env>-appdb-connection`), databases (`<name>_<env>_appdb`) and the SQLite share's environment
+  storage.
+- The app's identity is granted its own secrets, one by one, and never the shared vault.
+- **Its Postgres login is not in Terraform.** HCP's runners sit outside Azure and the firewall keeps them
+  out, so `deploy.yml` creates `preview_<name>_<env>` from the GitHub runner, which it has just let in.
+  The password comes from the connection string Terraform wrote. A destroy runs in HCP and cannot drop the
+  role, so each deploy drops the `preview_*` roles that own no database.
+
 ## Things that will bite you
 
 - **The linked backend keeps the `/api` prefix; Vite's proxy and Aspire's YARP strip it.** The

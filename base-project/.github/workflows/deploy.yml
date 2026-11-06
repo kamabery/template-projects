@@ -126,7 +126,12 @@ jobs:
             echo "RG_NAME=$(terraform output -raw resource_group_name)"
             echo "KV_NAME=$(terraform output -raw key_vault_name)"
             echo "DB_PROVIDER=$(terraform output -raw database_provider)"
+            echo "APPDB_SECRET=$(terraform output -raw appdb_connection_secret_name)"
             echo "DB_SERVER=$(terraform output -raw database_server_name 2>/dev/null || true)"
+            echo "DB_SERVER_RG=$(terraform output -raw database_server_resource_group 2>/dev/null || true)"
+            echo "DB_FQDN=$(terraform output -raw database_server_fqdn 2>/dev/null || true)"
+            echo "DB_ROLE=$(terraform output -raw database_role 2>/dev/null || true)"
+            echo "DB_NAMES=$(terraform output -raw database_names 2>/dev/null || true)"
             echo "DB_STORAGE=$(terraform output -raw database_storage_account_name 2>/dev/null || true)"
           } >> "$GITHUB_ENV"
 
@@ -161,11 +166,11 @@ jobs:
           case "$DB_PROVIDER" in
             postgres)
               az postgres flexible-server firewall-rule create \
-                --resource-group "$RG_NAME" --server-name "$DB_SERVER" --name gha-runner \
+                --resource-group "$DB_SERVER_RG" --server-name "$DB_SERVER" --name "gha-$TF_ENV" \
                 --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
             sqlserver)
               az sql server firewall-rule create \
-                --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner \
+                --resource-group "$DB_SERVER_RG" --server "$DB_SERVER" --name "gha-$TF_ENV" \
                 --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" ;;
           esac
 
@@ -178,6 +183,36 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # A preview on the factory's shared server gets a login of its own, so it cannot reach another
+      # preview's database. This is here, not in Terraform, because HCP's runners sit outside Azure and
+      # the firewall keeps them out; this runner has just been let in. A destroy runs in HCP and cannot
+      # drop the role either, so each deploy drops the ones whose databases have gone.
+      - name: create the preview's database login
+        if: env.DB_ROLE != ''
+        run: |
+          set -euo pipefail
+          admin_pw=$(az keyvault secret show --vault-name "$KV_NAME" --name postgres-admin-password --query value -o tsv)
+          conn=$(az keyvault secret show --vault-name "$KV_NAME" --name "$APPDB_SECRET" --query value -o tsv)
+          role_pw=$(sed -E 's/.*Password=([^;]*).*/\1/' <<< "$conn")
+          echo "::add-mask::$admin_pw"
+          echo "::add-mask::$role_pw"
+          export PGPASSWORD="$admin_pw" PGSSLMODE=require PGHOST="$DB_FQDN" PGUSER=pgadmin PGDATABASE=postgres
+          psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" -v pw="$role_pw" <<'SQL'
+          SELECT format('CREATE ROLE %I LOGIN', :'role') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
+          SELECT format('ALTER ROLE %I PASSWORD %L', :'role', :'pw') \gexec
+          SELECT format('GRANT %I TO CURRENT_USER', :'role') \gexec
+          SQL
+          for db in $DB_NAMES; do
+            psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" -v db="$db" <<'SQL'
+          SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role') \gexec
+          SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
+          SQL
+          done
+          psql -v ON_ERROR_STOP=1 -q <<'SQL'
+          SELECT format('DROP ROLE %I', r.rolname) FROM pg_roles r
+           WHERE r.rolname LIKE 'preview\_%' AND NOT EXISTS (SELECT FROM pg_database d WHERE d.datdba = r.oid) \gexec
+          SQL
 
       # Migrations are Development-only inside the application, deliberately: a deployment must not
       # apply an unreviewed schema change, and concurrent replicas would race. This is the step that
@@ -192,10 +227,10 @@ jobs:
           # RBAC can take a few more to reach the vault: retry for up to five minutes.
           for i in $(seq 1 20); do
             conn=$(az keyvault secret show --vault-name "$KV_NAME" \
-                     --name appdb-connection --query value -o tsv 2>/dev/null) && break
+                     --name "$APPDB_SECRET" --query value -o tsv 2>/dev/null) && break
             echo "waiting for the Key Vault role to propagate ($i/20)"; sleep 15
           done
-          [ -n "${conn:-}" ] || { echo "::error::cannot read appdb-connection from $KV_NAME as the deployer identity"; exit 1; }
+          [ -n "${conn:-}" ] || { echo "::error::cannot read $APPDB_SECRET from $KV_NAME as the deployer identity"; exit 1; }
           # dotnet ef builds but never restores (NETSDK1004 on a fresh runner).
           dotnet restore "$(ls -d src/*.api.migrations.* | head -1)"
           dotnet restore "$(ls -d src/*.api | head -1)"
@@ -318,10 +353,10 @@ jobs:
           case "$DB_PROVIDER" in
             postgres)
               az postgres flexible-server firewall-rule delete --yes \
-                --resource-group "$RG_NAME" --server-name "$DB_SERVER" --name gha-runner || true ;;
+                --resource-group "$DB_SERVER_RG" --server-name "$DB_SERVER" --name "gha-$TF_ENV" || true ;;
             sqlserver)
               az sql server firewall-rule delete \
-                --resource-group "$RG_NAME" --server "$DB_SERVER" --name gha-runner || true ;;
+                --resource-group "$DB_SERVER_RG" --server "$DB_SERVER" --name "gha-$TF_ENV" || true ;;
           esac
 
       # Where it landed. The factory reads the same outputs from HCP; this is for a person looking

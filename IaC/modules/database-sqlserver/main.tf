@@ -79,7 +79,7 @@ locals {
 }
 
 resource "azurerm_key_vault_secret" "appdb" {
-  name         = "appdb-connection"
+  name         = "${var.shared_prefix}appdb-connection"
   key_vault_id = var.key_vault_id
   value        = "${local.base_connection};Initial Catalog=${azurerm_mssql_database.appdb.name}"
 }
@@ -87,7 +87,24 @@ resource "azurerm_key_vault_secret" "appdb" {
 resource "azurerm_key_vault_secret" "eventstore" {
   count = var.include_events ? 1 : 0
 
-  name         = "eventstore-connection"
+  name         = "${var.shared_prefix}eventstore-connection"
   key_vault_id = var.key_vault_id
   value        = "${local.base_connection};Initial Catalog=${azurerm_mssql_database.eventstore[0].name}"
+}
+
+# On the platform the vault is shared, so the app is granted its own secrets and nothing else.
+resource "azurerm_role_assignment" "appdb_secret" {
+  count = var.shared_prefix == "" ? 0 : 1
+
+  scope                = azurerm_key_vault_secret.appdb.resource_versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.secret_reader_principal_id
+}
+
+resource "azurerm_role_assignment" "eventstore_secret" {
+  count = var.shared_prefix != "" && var.include_events ? 1 : 0
+
+  scope                = azurerm_key_vault_secret.eventstore[0].resource_versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.secret_reader_principal_id
 }

@@ -177,9 +177,9 @@ resource "msgraph_resource" "qa_user" {
 }
 
 resource "azurerm_key_vault_secret" "qa_password" {
-  name         = "qa-password"
+  name         = "${local.shared_prefix}qa-password"
   value        = random_password.qa.result
-  key_vault_id = azurerm_key_vault.main.id
+  key_vault_id = local.key_vault_id
 
   depends_on = [azurerm_role_assignment.kv_secrets_officer]
 }

@@ -18,9 +18,12 @@ module "database" {
   short_name                     = local.short_name
   environment                    = var.environment
   suffix                         = local.suffix
-  key_vault_id                   = azurerm_key_vault.main.id
-  container_app_environment_id   = azurerm_container_app_environment.main.id
-  container_app_environment_name = azurerm_container_app_environment.main.name
+  key_vault_id                   = local.key_vault_id
+  container_app_environment_id   = local.container_app_environment_id
+  container_app_environment_name = local.container_app_environment_name
+  shared_prefix                  = local.shared_prefix
+  secret_reader_principal_id     = azurerm_user_assigned_identity.app.principal_id
+  platform                       = local.on_platform ? var.platform : null
   include_events                 = var.include_events
   allowed_ip_ranges              = var.db_allowed_ip_ranges
   tags                           = local.tags

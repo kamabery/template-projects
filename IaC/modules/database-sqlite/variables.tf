@@ -18,3 +18,20 @@ variable "allowed_ip_ranges" {
   }))
   default = []
 }
+
+variable "shared_prefix" {
+  description = "Empty, or what makes this environment's names unique on the factory's shared platform."
+  type        = string
+  default     = ""
+}
+
+variable "secret_reader_principal_id" {
+  description = "On the platform, the app's identity: it is granted each secret here, never the shared vault."
+  type        = string
+}
+
+variable "platform" {
+  description = "The factory's shared platform when this environment runs on it, else null. Only the Postgres module has a server to share; the others take it so database.tf can pass one set of arguments."
+  type        = any
+  default     = null
+}

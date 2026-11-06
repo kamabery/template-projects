@@ -32,7 +32,7 @@ resource "azurerm_storage_share" "data" {
 }
 
 resource "azurerm_container_app_environment_storage" "data" {
-  name                         = "data"
+  name                         = "${var.shared_prefix}data"
   container_app_environment_id = var.container_app_environment_id
   account_name                 = azurerm_storage_account.main.name
   share_name                   = azurerm_storage_share.data.name
@@ -43,7 +43,7 @@ resource "azurerm_container_app_environment_storage" "data" {
 # Written to Key Vault like the server providers' connection strings, even though it holds no
 # credential, so that containerapp.api.tf has one shape to handle rather than two.
 resource "azurerm_key_vault_secret" "appdb" {
-  name         = "appdb-connection"
+  name         = "${var.shared_prefix}appdb-connection"
   key_vault_id = var.key_vault_id
   value        = "Data Source=/data/app.db"
 }
@@ -53,7 +53,24 @@ resource "azurerm_key_vault_secret" "appdb" {
 resource "azurerm_key_vault_secret" "eventstore" {
   count = var.include_events ? 1 : 0
 
-  name         = "eventstore-connection"
+  name         = "${var.shared_prefix}eventstore-connection"
   key_vault_id = var.key_vault_id
   value        = "Data Source=/data/eventstore.db"
+}
+
+# On the platform the vault is shared, so the app is granted its own secrets and nothing else.
+resource "azurerm_role_assignment" "appdb_secret" {
+  count = var.shared_prefix == "" ? 0 : 1
+
+  scope                = azurerm_key_vault_secret.appdb.resource_versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.secret_reader_principal_id
+}
+
+resource "azurerm_role_assignment" "eventstore_secret" {
+  count = var.shared_prefix != "" && var.include_events ? 1 : 0
+
+  scope                = azurerm_key_vault_secret.eventstore[0].resource_versionless_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.secret_reader_principal_id
 }

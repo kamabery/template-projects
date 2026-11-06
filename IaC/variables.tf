@@ -62,6 +62,30 @@ variable "deployer_object_id" {
   default     = null
 }
 
+variable "platform" {
+  description = "The factory's shared platform, which j<NNN> previews run on (see local.on_platform). Set on the HCP variable set by the factory's setup-platform.ps1; null means every environment has a stack of its own."
+  type = object({
+    location                   = string
+    environment_id             = string
+    environment_name           = string
+    environment_domain         = string
+    log_analytics_workspace_id = string
+    key_vault_id               = string
+    key_vault_name             = string
+    postgres_server_id         = string
+    postgres_server_name       = string
+    postgres_server_fqdn       = string
+    postgres_resource_group    = string
+  })
+  default = null
+}
+
+variable "use_platform" {
+  description = "False builds the whole stack for a preview too, which is what the factory's full canary does to prove a from-scratch create."
+  type        = bool
+  default     = true
+}
+
 variable "db_allowed_ip_ranges" {
   description = "Extra client IPs allowed through the database firewall, as start/end pairs. The database already allows Azure services, which covers the container apps; this is for running `dotnet ef database update` from a laptop or a CI runner."
   type = list(object({
