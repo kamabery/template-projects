@@ -87,7 +87,7 @@ function RootLayout() {
       <div className="min-h-dvh">
         <header className="border-b border-border-subtle bg-surface-raised">
           <div className="mx-auto flex max-w-4xl items-center gap-1 px-6 py-3">
-            <span className="mr-4 font-semibold">template.ui</span>
+            <span className="mr-4 font-semibold">AspireStarterAppName</span>
 
             <NavBar>
               <NavItem to="/" exact>

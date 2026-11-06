@@ -8,12 +8,14 @@ internal static class RepoPaths
 
     public static string IaC(string fileName) => Find(Path.Combine("IaC", fileName));
 
+    public static string File(string rel) => Find(rel);
+
     private static string Find(string rel)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             var candidate = Path.Combine(dir.FullName, rel);
-            if (File.Exists(candidate)) return candidate;
+            if (System.IO.File.Exists(candidate)) return candidate;
         }
 
         throw new FileNotFoundException($"{rel.Replace('\\', '/')} not found above {AppContext.BaseDirectory}");

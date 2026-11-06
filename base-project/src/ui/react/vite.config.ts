@@ -44,8 +44,8 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'icon-maskable.svg'],
       manifest: {
-        name: 'template.ui',
-        short_name: 'template.ui',
+        name: 'AspireStarterAppName',
+        short_name: 'AspireStarterAppName',
         description: 'Aspire + React reference front end.',
         id: '/',
         start_url: '/',

@@ -40,6 +40,21 @@
         "toLower": true
       }
     },
+    "appName": {
+      "//": "The -n value verbatim, as the app's title, header and installed-app name. The bare sourceName cannot be written there (stage.ps1 refuses it outside a project name), and `template.ui` showed every scaffold as `<name>.ui` (J-019).",
+      "type": "generated",
+      "generator": "join",
+      "replaces": "AspireStarterAppName",
+      "parameters": {
+        "separator": "",
+        "symbols": [
+          {
+            "type": "ref",
+            "value": "name"
+          }
+        ]
+      }
+    },
     "nameBlazorProject": {
       "//": "This template's sourceName is the lowercase `template` and the engine matches it case-sensitively, so the PascalCase `Template.Blazor.*` project names that docs/DESIGN.md and index.css use to point at the Blazor half are not substituted by it. A React scaffold has no Blazor project, but those references still name the counterpart this design system is kept in step with, and a stale `Template.` prefix names something that never existed. Two details are load-bearing: the match is scoped to `Template.Blazor` rather than the bare word, because `Template` alone would also rewrite unrelated PascalCase uses; and the value has to carry the `.Blazor` suffix, because `replaces` swaps the whole matched string for it - a bare name would collapse `Template.Blazor.Maui.Pages` to `<Name>.Maui.Pages`.",
       "type": "generated",
