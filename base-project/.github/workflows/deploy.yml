@@ -208,6 +208,11 @@ jobs:
           SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role') \gexec
           SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
           SQL
+            # Azure's public schema belongs to azure_pg_admin, not the database's owner, so owning the
+            # database does not let the role create tables in it (42501, canary 21).
+            PGDATABASE="$db" psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" <<'SQL'
+          SELECT format('GRANT ALL ON SCHEMA public TO %I', :'role') \gexec
+          SQL
           done
           psql -v ON_ERROR_STOP=1 -q <<'SQL'
           SELECT format('DROP ROLE %I', r.rolname) FROM pg_roles r

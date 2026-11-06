@@ -108,7 +108,8 @@ most of what makes a preview slow. dev, staging and `use_platform = false` keep 
 - The app's identity is granted its own secrets, one by one, and never the shared vault.
 - **Its Postgres login is not in Terraform.** HCP's runners sit outside Azure and the firewall keeps them
   out, so `deploy.yml` creates `preview_<name>_<env>` from the GitHub runner, which it has just let in.
-  The password comes from the connection string Terraform wrote. A destroy runs in HCP and cannot drop the
+  The password comes from the connection string Terraform wrote. It gets each database and an explicit
+  grant on its `public` schema, which on Azure belongs to `azure_pg_admin`, not the database's owner. A destroy runs in HCP and cannot drop the
   role, so each deploy drops the `preview_*` roles that own no database.
 
 ## Things that will bite you
