@@ -46,6 +46,7 @@ public sealed class InfraCommandTests : IDisposable
         Write("IaC/modules/database-sqlite/main.tf");
         Write("IaC/containerapp.api.tf");
         Write("IaC/frontend.react.tf");
+        Write("src/ui/react/public/staticwebapp.config.json", """{ "navigationFallback": { "rewrite": "/index.html" } }""");
         Write(".github/workflows/deploy.yml", DispatchOnly);
     }
 
@@ -79,6 +80,24 @@ public sealed class InfraCommandTests : IDisposable
         text.ShouldContain("IaC/guards.tf");
         text.ShouldContain("push");
         text.ShouldContain("infra adopt");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("""{ "routes": [] }""")]
+    public void AReactStaticWebAppWithoutANavigationFallback_IsReported(string? config)
+    {
+        // J-019: /todos and /archive answered 404 on the preview. Vite serves index.html for any
+        // client-side route locally; a Static Web App does only with a navigationFallback.
+        ReadyScaffold();
+        var path = Path.Combine(_root, "src/ui/react/public/staticwebapp.config.json");
+        if (config is null) File.Delete(path); else File.WriteAllText(path, config);
+
+        Check().ShouldBe(1);
+
+        var text = _output.ToString();
+        text.ShouldContain("src/ui/react/public/staticwebapp.config.json");
+        text.ShouldContain("navigationFallback");
     }
 
     [Fact]

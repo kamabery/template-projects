@@ -107,6 +107,12 @@ internal sealed partial class InfraCommand(ITemplateRunner runner, TextWriter ou
                 findings.Add(new($"IaC/{twin.File}", $"missing; {label} needs its {twin.Azure} twin"));
         }
 
+        // Vite serves index.html for any client-side route; a Static Web App does only with a
+        // navigationFallback, and without one a deep link or a refresh is a 404 (J-019).
+        const string SwaConfig = "src/ui/react/public/staticwebapp.config.json";
+        if (Has("IaC/frontend.react.tf") && !Text(SwaConfig).Contains("\"navigationFallback\""))
+            findings.Add(new(SwaConfig, "has no navigationFallback, so opening or refreshing a client-side route is a 404 on the Static Web App"));
+
         return findings;
     }
 
