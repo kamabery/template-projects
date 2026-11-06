@@ -35,8 +35,8 @@ locals {
   api_image = local.use_placeholder ? local.placeholder_image : "${azurerm_container_registry.main.login_server}/${local.base_name}-api:${var.image_tag}"
   api_port  = local.use_placeholder ? 80 : 8080
 
-  # NOT /health. MapDefaultEndpoints maps /health and /alive in Development only, and this container
-  # runs as Production, so a /health probe fails every revision with nothing to explain why.
+  # NOT /health. It includes the database check, so a probe on it restarts a healthy container
+  # whenever the database blips (and older scaffolds map it in Development only).
   # /openapi/v1.json is mapped unconditionally in Program.cs.
   api_probe_path = local.use_placeholder ? "/" : "/openapi/v1.json"
 

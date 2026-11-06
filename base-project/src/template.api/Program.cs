@@ -38,8 +38,15 @@ builder.Services.AddSingleton<HarnessFaultInjector>();
 
 var app = builder.Build();
 
+// React's Static Web App links this API as its backend and forwards /api/* with the prefix intact,
+// where Vite's proxy and Aspire's YARP strip it. UsePathBase strips it when present and passes
+// every other request through, so one pipeline serves all three. UseRouting has to follow it, or
+// WebApplication routes before the prefix is removed.
+app.UsePathBase("/api");
+app.UseRouting();
+
 // Configure the HTTP request pipeline.
-// Not gated on Development, unlike /health and /harness/*: the Swagger UI page below fetches this
+// Not gated on Development, unlike /harness/*: the Swagger UI page below fetches this
 // document from the browser, so gating it would leave the UI rendering an error everywhere else.
 app.MapOpenApi();
 

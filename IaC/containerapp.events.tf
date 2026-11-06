@@ -118,7 +118,7 @@ resource "azurerm_container_app" "events" {
         }
       }
 
-      # Not /health: MapDefaultEndpoints maps it in Development only and this runs as Production.
+      # Not /health: it includes the database check, so a probe on it restarts on a database blip.
       # /openapi/v1.json is mapped unconditionally in the events host's Program.cs.
       liveness_probe {
         transport = "HTTP"

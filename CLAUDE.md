@@ -861,7 +861,7 @@ document generator, no transitive dependencies (note it is *not* `SwaggerGen`, o
 The page has a working **Try it out** button; it is same-origin with the API, so it needs no CORS
 entry, and every asset is embedded, so it works offline. `RoutePrefix` must be set explicitly —
 it defaults to `swagger`, and `/api-docs` is what the AppHost link, the README and the tests
-expect; `SwaggerEndpoint` is what aims it at `MapOpenApi`'s document. Unlike `/health` and
+expect; `SwaggerEndpoint` is what aims it at `MapOpenApi`'s document. Unlike
 `/harness/*`, **neither route is gated on Development**; that is deliberate, and the README records
 the consequence — the document advertises the Development-only `/harness/*` endpoints, which are
 now one click from executing.

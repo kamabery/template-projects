@@ -20,7 +20,7 @@ output "api_url" {
 }
 
 output "api_docs_url" {
-  description = "Swagger UI. Unlike /health it is not gated on Development, so it works here."
+  description = "Swagger UI. Not gated on Development, so it works here."
   value       = "https://${azurerm_container_app.api.ingress[0].fqdn}/api-docs"
 }
 
