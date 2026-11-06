@@ -71,6 +71,11 @@ the new project lives somewhere else.
    (`.claude/settings.local.json`, not committed) where the directory is
    shared with anyone else.
 
+   It is also a plugin directory in its own right (`.claude-plugin/plugin.json`),
+   so `claude --plugin-dir <path-to>\template-projects` loads the skills with no
+   install. That is how claude-factory's headless jobs get them; its bootstrap
+   job runs `boot-strap-app` with every answer supplied, so there is no interview.
+
 3. **Optionally, pre-install the pack and the CLI** with the commands under
    "Scaffolding by hand" below. If you skip this, the skills do it on first
    use from `ASPIRE_STARTER_DIR`.
