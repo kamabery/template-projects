@@ -12,6 +12,12 @@
 # person (or the factory, for a preview) decides when. Production is not deployed from here at all,
 # and variables.tf refuses it as well.
 #
+# Optional `since` is the commit the environment was last applied at (the factory passes it when it
+# redeploys over a live preview). When every file changed since then is under src/ui/ and the
+# environment's Terraform outputs already exist, this is a front-end-only deploy: it skips both
+# applies, the images, the database firewall, the schema and Functions, and just publishes the front
+# end(s). In every other case, an empty `since` included, all the steps run.
+#
 #   environment = dev | staging   envs/<environment>.tfvars, GitHub environment of the same name
 #   environment = j<NNN>          one factory job's ephemeral preview: envs/ephemeral.tfvars,
 #                                 GitHub environment "preview", dispatched on the job's branch
@@ -39,6 +45,11 @@ on:
         description: dev, staging, or j<NNN> for a factory job's ephemeral preview
         type: string
         default: dev
+      since:
+        description: the commit this environment was last applied at; enables the front-end-only path
+        type: string
+        required: false
+        default: ''
 
 permissions:
   id-token: write
@@ -74,7 +85,10 @@ jobs:
             exit 1
           fi
 
+      # Full history, so that the `since` commit is reachable for the front-end-only decision.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: azure/login@v2
         with:
@@ -95,6 +109,32 @@ jobs:
         working-directory: IaC
         run: terraform init
 
+      # The front-end-only path. Each step it skips is guarded on FRONT_END_ONLY != 'true', so if this
+      # step never set it the full path runs. The publish steps read their tokens from terraform
+      # output, which needs only the init above, and they do not use Azure sign-in at all. The key is
+      # the check that the environment has been applied: a fresh preview has no outputs to publish with.
+      - name: decide the deploy path
+        working-directory: IaC
+        env:
+          SINCE: ${{ inputs.since }}
+        run: |
+          key=react_api_key
+          [ -f ../src/ui/react/package.json ] || key=blazor_web_api_key
+          answer=$(bash ../.github/scripts/front-end-only.sh "$SINCE" || true)
+          front_end_only=false
+          if [ -z "$SINCE" ]; then
+            reason="no since input"
+          elif [ "$answer" != "true" ]; then
+            reason="since '$SINCE' is not a commit here, or files changed outside src/ui/"
+          elif [ -z "$(terraform output -raw "$key" 2>/dev/null || true)" ]; then
+            reason="only src/ui/ changed since '$SINCE', but terraform output $key is empty"
+          else
+            front_end_only=true
+            reason="only src/ui/ changed since '$SINCE', and terraform output $key exists"
+          fi
+          echo "FRONT_END_ONLY=$front_end_only" >> "$GITHUB_ENV"
+          echo "- FRONT_END_ONLY=$front_end_only: $reason" >> "$GITHUB_STEP_SUMMARY"
+
       # Runs queued through HCP's API - a teardown, and the workspace's auto-destroy timer - get no
       # -var flags, only the configuration the last apply uploaded. This file goes up with every
       # apply below, so those runs see this environment's variables too; without it a destroy fails
@@ -109,6 +149,7 @@ jobs:
       # container apps must not be created until there is an image for them to pull. -target is the
       # right tool for exactly this ordering problem and for nothing else.
       - name: terraform apply (registry and database)
+        if: env.FRONT_END_ONLY != 'true'
         working-directory: IaC
         run: |
           terraform apply -auto-approve \
@@ -119,6 +160,7 @@ jobs:
             -target=azurerm_role_assignment.kv_secrets_deployer
 
       - name: read outputs
+        if: env.FRONT_END_ONLY != 'true'
         working-directory: IaC
         run: |
           {
@@ -136,6 +178,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: build and push images
+        if: env.FRONT_END_ONLY != 'true'
         run: |
           set -euo pipefail
           api_project=$(ls -d src/*.api | head -1)
@@ -156,9 +199,10 @@ jobs:
 
       # The runner is not an Azure resource, so the database's AllowAzureServices rule does not
       # cover it. Opened here and closed unconditionally at the end - leaving it open would hand
-      # every future workflow run a standing hole.
+      # every future workflow run a standing hole. A front-end-only deploy never opens it, so
+      # RUNNER_IP stays empty and the close at the end skips itself.
       - name: open the database firewall for this runner
-        if: env.DB_PROVIDER != 'sqlite'
+        if: env.FRONT_END_ONLY != 'true' && env.DB_PROVIDER != 'sqlite'
         run: |
           set -euo pipefail
           runner_ip=$(curl -fsS https://api.ipify.org)
@@ -178,7 +222,8 @@ jobs:
       # needs a token for a new resource - Key Vault here, Storage for the SQLite seed. The registry
       # and database apply above takes longer than that, so without this the schema step fails with
       # AADSTS700024 ("Client assertion is not within its valid time range").
-      - uses: azure/login@v2
+      - if: env.FRONT_END_ONLY != 'true'
+        uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -189,7 +234,7 @@ jobs:
       # the firewall keeps them out; this runner has just been let in. A destroy runs in HCP and cannot
       # drop the role either, so each deploy drops the ones whose databases have gone.
       - name: create the preview's database login
-        if: env.DB_ROLE != ''
+        if: env.FRONT_END_ONLY != 'true' && env.DB_ROLE != ''
         run: |
           set -euo pipefail
           admin_pw=$(az keyvault secret show --vault-name "$KV_NAME" --name postgres-admin-password --query value -o tsv)
@@ -223,7 +268,7 @@ jobs:
       # apply an unreviewed schema change, and concurrent replicas would race. This is the step that
       # replaces InitializeDatabaseAsync.
       - name: apply the schema
-        if: env.DB_PROVIDER != 'sqlite'
+        if: env.FRONT_END_ONLY != 'true' && env.DB_PROVIDER != 'sqlite'
         run: |
           set -euo pipefail
           dotnet tool install --global dotnet-ef --version "10.*" \
@@ -250,7 +295,7 @@ jobs:
       # rather than run every time. A later schema change on this branch is a manual operation, and
       # that is one of the costs of choosing SQLite.
       - name: seed the SQLite file if the share is empty
-        if: env.DB_PROVIDER == 'sqlite'
+        if: env.FRONT_END_ONLY != 'true' && env.DB_PROVIDER == 'sqlite'
         run: |
           set -euo pipefail
           exists=$(az storage file exists --account-name "$DB_STORAGE" --share-name data \
@@ -271,6 +316,7 @@ jobs:
             --source "$PWD/app.db" --path app.db --auth-mode login
 
       - name: terraform apply
+        if: env.FRONT_END_ONLY != 'true'
         working-directory: IaC
         run: |
           terraform apply -auto-approve \
@@ -284,6 +330,7 @@ jobs:
       # what puts the origin into the API's Cors:AllowedOrigins. Without it the page loads and every
       # request fails in the browser while the API logs healthy 200s.
       - name: terraform apply (Blazor CORS origin)
+        if: env.FRONT_END_ONLY != 'true'
         working-directory: IaC
         run: |
           set -euo pipefail
@@ -302,7 +349,7 @@ jobs:
       # zip of the published worker rather than an `az acr build`, and it has to follow the apply
       # that creates the function app.
       - name: publish the Functions consumer
-        if: hashFiles('src/*.events.functions/*.csproj') != ''
+        if: env.FRONT_END_ONLY != 'true' && hashFiles('src/*.events.functions/*.csproj') != ''
         working-directory: IaC
         run: |
           set -euo pipefail
