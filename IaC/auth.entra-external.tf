@@ -11,12 +11,13 @@
 #   - one QA user (email + generated password), the password kept in this environment's Key Vault
 # All of it is destroyed with the environment.
 #
-# Made once, by hand, and passed in through the HCP project's variable set (see RESOURCE-MAP.md):
+# Made once, by hand (see RESOURCE-MAP.md):
 #   - the External tenant itself, and a sign-in user flow in it (Terraform cannot create a tenant)
 #   - an app registration there that HCP signs in as, with Application.ReadWrite.All,
 #     User.ReadWrite.All and EventListener.ReadWrite.All, and a federated credential for HCP
 #   - TFC_AZURE_PROVIDER_AUTH_EXTERNAL / TFC_AZURE_RUN_CLIENT_ID_EXTERNAL on the variable set, which
 #     is what makes HCP hand this configuration the "EXTERNAL" credentials below
+#   - the entra_external_* ids below, in IaC/envs/<environment>.tfvars: not secrets, and one source
 
 variable "entra_external_tenant_id" {
   description = "The Entra External ID tenant's id."
@@ -72,7 +73,7 @@ resource "terraform_data" "entra_external_configured" {
   lifecycle {
     precondition {
       condition     = var.entra_external_tenant_id != null && var.entra_external_subdomain != null && var.entra_external_user_flow_id != null
-      error_message = "Set entra_external_tenant_id, entra_external_subdomain and entra_external_user_flow_id on the HCP project's variable set."
+      error_message = "Set entra_external_tenant_id, entra_external_subdomain and entra_external_user_flow_id in IaC/envs/<environment>.tfvars."
     }
   }
 }
@@ -165,6 +166,18 @@ resource "msgraph_resource_action" "user_flow_link" {
     "@odata.type" = "#microsoft.graph.authenticationConditionApplication"
     appId         = azuread_application.spa.client_id
   }
+
+  # The user flow cannot see a new app until Entra replicates it, which has taken minutes: until then
+  # this is a 400, "The application id ... is invalid" (AADB2C), that the provider will not retry alone.
+  retry = {
+    error_message_regex = ["The application id .* is invalid"]
+  }
+
+  timeouts {
+    create = "20m"
+  }
+
+  depends_on = [azuread_service_principal.spa, azuread_application_identifier_uri.spa]
 }
 
 resource "random_password" "qa" {

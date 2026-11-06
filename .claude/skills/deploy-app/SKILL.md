@@ -67,7 +67,7 @@ Commit locally. Do not push.
 | --- | --- | --- |
 | Every container app revision fails its probe, or restarts when the database blips | a probe on `/health`, which includes the database check (and is Development-only in scaffolds older than 2026-10-24) | probe `/openapi/v1.json` |
 | Plan stops at `terraform_data.no_production` | `environment = prod` reached Terraform | never deploy prod; fix the input |
-| Plan stops at `terraform_data.entra_external_configured` | the HCP variable set lacks the External tenant settings | a finding for the human - you cannot set them |
+| Plan stops at `terraform_data.entra_external_configured` | `IaC/envs/<environment>.tfvars` lacks the `entra_external_*` ids | a finding for the human - you do not have them |
 | `403` writing a Key Vault secret on first apply | the role assignment had not landed | `depends_on` the `kv_secrets_officer` assignment |
 | Image pull fails on the first apply | no image pushed yet | the two-phase `-target` apply in `deploy.yml` builds first; keep that ordering |
 | Blazor page loads, every API call fails, API logs 200s | CORS origin missing | the workflow's second apply passes `cors_allowed_origins`; keep it |

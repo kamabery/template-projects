@@ -78,7 +78,7 @@ Inside the API container, below the `<<addon-api-env>>` marker. The values come 
 Terraform cannot create an Entra External ID tenant. Before the first deploy, create the tenant, a
 sign-in user flow in it, and an app registration HCP signs in as (see the header of
 `IaC/auth.entra-external.tf`), then put `entra_external_tenant_id`, `entra_external_subdomain` and
-`entra_external_user_flow_id` on the HCP project's variable set. A plan without them stops at
+`entra_external_user_flow_id` in `IaC/envs/{dev,staging,ephemeral}.tfvars`. A plan without them stops at
 `terraform_data.entra_external_configured` with a message saying so.
 
 ---

@@ -50,6 +50,28 @@ public sealed class AuthLessonsTests
         Auth.ShouldContain("fetch('/api/me'");
     }
 
+    // Canaries 16 and 24: the link raced the new app with "The application id ... is invalid" (AADB2C,
+    // a 400 the provider does not retry on its own), and J-023's preview did the same link fine.
+    [Fact]
+    public void TheUserFlowLink_WaitsForTheNewAppToReplicate()
+    {
+        var link = Entra[Entra.IndexOf("resource \"msgraph_resource_action\" \"user_flow_link\"", StringComparison.Ordinal)..];
+        link = link[..link.IndexOf("resource \"random_password\"", StringComparison.Ordinal)];
+
+        link.ShouldContain("error_message_regex");
+        link.ShouldContain("The application id");
+        link.ShouldContain("azuread_service_principal.spa");
+    }
+
+    // The ids belong in the target's tfvars, one source (J-022): a -var-file overrides the set anyway.
+    [Fact]
+    public void TheEntraIds_AreSaidToLiveInTheTargetsTfvars()
+    {
+        Entra.ShouldNotContain("on the HCP project's variable set.");
+        Wiring.ShouldNotContain("on the HCP project's variable set");
+        Entra.ShouldContain("IaC/envs/");
+    }
+
     [Fact]
     public void TheDeploySkill_SaysWhatToDoAboutAnOrphanFromACutOffApply()
     {
