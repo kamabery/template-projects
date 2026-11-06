@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "lint": "oxlint",
+    "lint": "oxlint && node scripts/check-design-tokens.mjs",
     "preview": "vite preview",
     "api:types": "openapi-typescript ../../../contracts/api.openapi.json -o src/lib/api.generated.ts"
   },

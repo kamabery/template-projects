@@ -31,7 +31,7 @@ function HomePage() {
         </h1>
         <p className="max-w-2xl text-content-muted">
           Vite, React 19 and Tailwind CSS on the front, the{' '}
-          <code className="rounded bg-surface-raised px-1.5 py-0.5 text-sm">
+          <code className="rounded-control bg-surface-raised px-1.5 py-0.5 text-sm">
             template.api
           </code>{' '}
           dotnet service on the back. Open{' '}
@@ -51,7 +51,7 @@ function HomePage() {
           {health.isError && (
             <span className="text-content-muted">
               Offline — start the API with{' '}
-              <code className="rounded bg-surface px-1.5 py-0.5 text-sm">
+              <code className="rounded-control bg-surface px-1.5 py-0.5 text-sm">
                 dotnet run
               </code>{' '}
               in src/template.api.
