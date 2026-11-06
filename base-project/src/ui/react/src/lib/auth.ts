@@ -12,18 +12,25 @@
  * signed in, a new tab or a closed browser does not.
  */
 import { Store, useStore } from '@tanstack/react-store'
-import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
+import { ErrorResponse, UserManager, WebStorageStateStore } from 'oidc-client-ts'
+import type { User } from 'oidc-client-ts'
 import type { components } from './api.generated'
 
 type AuthConfig = components['schemas']['AuthConfig']
+type CurrentUser = components['schemas']['CurrentUser']
 
 interface AuthState {
   enabled: boolean
   /** Display name of the signed-in user, or null. */
   user: string | null
+  /**
+   * Why the last sign-in did not complete, in the provider's words, or null.
+   * Without it a failed sign-in looks like the page simply reloaded.
+   */
+  error: string | null
 }
 
-export const authStore = new Store<AuthState>({ enabled: false, user: null })
+export const authStore = new Store<AuthState>({ enabled: false, user: null, error: null })
 
 let manager: UserManager | null = null
 
@@ -56,21 +63,57 @@ export async function initAuth(): Promise<void> {
     userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   })
 
+  // The provider sends the browser back to `/` with either `code` and `state`
+  // (signed in) or `error`, `error_description` and `state` (it refused). Both
+  // are handled: an ignored error is a sign-in that "just refreshes the page".
+  let error: string | null = null
   const params = new URLSearchParams(window.location.search)
-  if (params.has('code') && params.has('state')) {
+  if (params.has('state') && (params.has('code') || params.has('error'))) {
     try {
       await manager.signinRedirectCallback()
+    } catch (failure) {
+      error = params.get('error_description') ?? params.get('error') ?? describe(failure)
+      console.error('Sign-in did not complete:', failure)
     } finally {
-      // Drop code and state from the address bar before the router reads it.
+      // Drop code, error and state from the address bar before the router reads it.
       window.history.replaceState(null, '', window.location.pathname)
     }
   }
 
-  const user = await manager.getUser()
+  let signedIn: User | null = null
+  try {
+    const user = await manager.getUser()
+    signedIn = user && !user.expired ? user : null
+  } catch (failure) {
+    console.error('Could not read the signed-in user:', failure)
+  }
+  const me = signedIn ? await fetchMe(signedIn.access_token) : null
+
   authStore.setState(() => ({
     enabled: true,
-    user: user && !user.expired ? displayName(user.profile) : null,
+    user: signedIn ? (me?.name ?? displayName(signedIn.profile)) : null,
+    error: signedIn ? null : error,
   }))
+}
+
+/** The provider's own description when it gave one (an `ErrorResponse`), else the message. */
+function describe(failure: unknown): string {
+  if (failure instanceof ErrorResponse) {
+    return failure.error_description ?? failure.error ?? failure.message
+  }
+  return failure instanceof Error ? failure.message : String(failure)
+}
+
+/** The API's view of the caller. Null if it cannot be had; the token's own name is then shown. */
+async function fetchMe(accessToken: string): Promise<CurrentUser | null> {
+  try {
+    const response = await fetch('/api/me', {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+    })
+    return response.ok ? ((await response.json()) as CurrentUser) : null
+  } catch {
+    return null
+  }
 }
 
 function displayName(profile: {
@@ -82,8 +125,23 @@ function displayName(profile: {
   return profile.name ?? profile.preferred_username ?? profile.email ?? profile.sub
 }
 
-export function signIn(): Promise<void> {
-  return manager?.signinRedirect() ?? Promise.resolve()
+/**
+ * Leaves for the provider's sign-in page. Never rejects: if the page cannot be
+ * reached (its discovery document fails to load, say), the reason is shown
+ * instead of the click doing nothing.
+ */
+export async function signIn(): Promise<void> {
+  if (!manager) return
+  authStore.setState((state) => ({ ...state, error: null }))
+  try {
+    await manager.signinRedirect()
+  } catch (failure) {
+    console.error('Could not start sign-in:', failure)
+    authStore.setState((state) => ({
+      ...state,
+      error: `Could not reach the sign-in page: ${describe(failure)}`,
+    }))
+  }
 }
 
 export function signOut(): Promise<void> {

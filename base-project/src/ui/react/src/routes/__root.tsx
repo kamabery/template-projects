@@ -64,7 +64,7 @@ function ThemeToggle() {
 
 /** Nothing at all unless the API says writes need a signed-in user. */
 function AuthControl() {
-  const { enabled, user } = useAuth()
+  const { enabled, user, error } = useAuth()
   if (!enabled) return null
 
   return user ? (
@@ -75,9 +75,16 @@ function AuthControl() {
       </Button>
     </div>
   ) : (
-    <Button variant="secondary" size="sm" onClick={() => void signIn()}>
-      Sign in
-    </Button>
+    <div className="flex items-center gap-2">
+      {error && (
+        <span role="alert" className="text-xs text-intent-danger">
+          Sign-in did not complete: {error}
+        </span>
+      )}
+      <Button variant="secondary" size="sm" onClick={() => void signIn()}>
+        Sign in
+      </Button>
+    </div>
   )
 }
 

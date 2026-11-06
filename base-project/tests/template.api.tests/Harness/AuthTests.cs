@@ -89,6 +89,38 @@ public sealed class AuthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Me_WithoutAnAuthority_IsUnauthorized()
+    {
+        await using var hosted = Hosted(withAuthority: false);
+
+        var response = await hosted.Client.GetAsync("/me");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Me_Anonymous_IsUnauthorized()
+    {
+        await using var hosted = Hosted(withAuthority: true);
+
+        var response = await hosted.Client.GetAsync("/me");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Me_SignedIn_SaysWhoTheCallerIs()
+    {
+        // The factory's sign-in smoke passes only when this answers 200 with the access token.
+        await using var hosted = Hosted(withAuthority: true);
+        hosted.Client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, "qa@example.test");
+
+        var me = await hosted.Client.GetFromJsonAsync<AuthController.CurrentUser>("/me");
+
+        me!.Name.ShouldBe("qa@example.test");
+    }
+
+    [Fact]
     public async Task WithAnAuthority_ReadsStayAnonymous()
     {
         await using var hosted = Hosted(withAuthority: true);

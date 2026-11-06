@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 
 namespace template.api.Controllers;
@@ -30,6 +31,13 @@ public sealed class AuthController(IConfiguration configuration) : ControllerBas
     /// access token's audience this API.</param>
     public record AuthConfig(bool Enabled, string? Authority, string? ClientId, string? Scope);
 
+    /// <param name="Name">Who the access token says the caller is, for the app to show.</param>
+    public record CurrentUser(string Name);
+
+    // JWT bearer maps some inbound claims to the long names, and each provider sends a different set.
+    private static readonly string[] NameClaims =
+        [ClaimTypes.Name, "name", "preferred_username", ClaimTypes.Email, "email", ClaimTypes.NameIdentifier, "sub"];
+
     [HttpGet("config", Name = "GetAuthConfig")]
     [EndpointSummary("Where a client signs in, or that it does not need to")]
     [ProducesResponseType<AuthConfig>(StatusCodes.Status200OK)]
@@ -40,5 +48,19 @@ public sealed class AuthController(IConfiguration configuration) : ControllerBas
         return string.IsNullOrWhiteSpace(authority)
             ? Ok(new AuthConfig(false, null, null, null))
             : Ok(new AuthConfig(true, authority, configuration["Auth:ClientId"], configuration["Auth:Scope"]));
+    }
+
+    // Checked here, not with [Authorize]: with sign-in off no scheme is registered for it to challenge.
+    [HttpGet("/me", Name = "GetCurrentUser")]
+    [EndpointSummary("Who the signed-in caller is")]
+    [ProducesResponseType<CurrentUser>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public ActionResult<CurrentUser> GetMe()
+    {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized();
+
+        var name = NameClaims.Select(User.FindFirstValue).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        return Ok(new CurrentUser(name ?? "signed in"));
     }
 }

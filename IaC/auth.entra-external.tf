@@ -36,13 +36,19 @@ variable "entra_external_user_flow_id" {
   default     = null
 }
 
+variable "auth_admin_email" {
+  description = "The admin's email, for an app that has an admin: it reaches the API as Auth:AdminEmail. Null sets nothing."
+  type        = string
+  default     = null
+}
+
 # var.tfc_azure_dynamic_credentials is declared in providers.tf.
 locals {
   external_credentials = try(var.tfc_azure_dynamic_credentials.aliases["EXTERNAL"], null)
 
   auth_authority = "https://${coalesce(var.entra_external_subdomain, "unset")}.ciamlogin.com/${coalesce(var.entra_external_tenant_id, "unset")}/v2.0"
   auth_client_id = azuread_application.spa.client_id
-  auth_scope     = "openid profile offline_access api://${azuread_application.spa.client_id}/access"
+  auth_scope     = "openid profile offline_access ${azuread_application.spa.client_id}/access"
 
   graph_app_id = "00000003-0000-0000-c000-000000000000"
 }
@@ -110,8 +116,20 @@ resource "azuread_application" "spa" {
     }
   }
 
+  # So an app can tell who is signing in: Entra External ID puts email in a token only as an optional claim.
+  optional_claims {
+    access_token {
+      name = "email"
+    }
+    id_token {
+      name = "email"
+    }
+  }
+
+  # identifier_uris is owned by azuread_application_identifier_uri.spa below; without ignoring it,
+  # any later update to this app clears the URI (J-022: AADSTS500011).
   lifecycle {
-    ignore_changes = [single_page_application]
+    ignore_changes = [single_page_application, identifier_uris]
   }
 
   depends_on = [terraform_data.entra_external_configured]

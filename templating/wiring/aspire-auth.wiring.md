@@ -61,6 +61,14 @@ Inside the API container, below the `<<addon-api-env>>` marker. The values come 
         name  = "Auth__Scope"
         value = local.auth_scope
       }
+
+      dynamic "env" {
+        for_each = var.auth_admin_email == null ? [] : [var.auth_admin_email]
+        content {
+          name  = "Auth__AdminEmail"
+          value = env.value
+        }
+      }
 ```
 
 ---

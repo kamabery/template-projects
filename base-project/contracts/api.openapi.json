@@ -61,6 +61,17 @@
         ],
         "type": "object"
       },
+      "CurrentUser": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "FailNextRequest": {
         "properties": {
           "count": {
@@ -486,6 +497,57 @@
         "summary": "Clear injected latency and injected failures",
         "tags": [
           "Harness"
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "GetCurrentUser",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Who the signed-in caller is",
+        "tags": [
+          "Auth"
         ]
       }
     }

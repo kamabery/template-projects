@@ -51,6 +51,28 @@ run "points_at_the_external_tenant" {
   }
 }
 
+run "asks_for_the_scope_by_client_id" {
+  command = plan
+
+  # J-022: asked for as api://<client id>/access, sign-in depends on the identifier URI, and fails
+  # with AADSTS500011 if anything clears it. By client id it needs no URI at all.
+  override_resource {
+    target          = azuread_application.spa
+    override_during = plan
+    values = {
+      # A plan-time override mocks every other computed attribute too; the id must still parse as
+      # /applications/{object id} for the resources that reference it.
+      id        = "/applications/00000000-0000-0000-0000-0000000000aa"
+      client_id = "00000000-0000-0000-0000-0000000000bb"
+    }
+  }
+
+  assert {
+    condition     = local.auth_scope == "openid profile offline_access 00000000-0000-0000-0000-0000000000bb/access"
+    error_message = "Request the API scope as <client id>/access, not through the identifier URI."
+  }
+}
+
 run "qa_user_is_named_for_the_environment" {
   command = plan
 
