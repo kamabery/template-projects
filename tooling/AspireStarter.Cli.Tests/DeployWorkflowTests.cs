@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace AspireStarter.Cli.Tests;
 
 public sealed class DeployWorkflowTests
@@ -41,6 +43,35 @@ public sealed class DeployWorkflowTests
     public void TheDecisionScripts_Ship_WithoutACarriageReturn(string rel)
     {
         File.ReadAllText(RepoPaths.File(rel)).ShouldNotContain("\r");
+    }
+
+    // The decision itself, not its text: the script's own cases run against a throwaway git repo.
+    [Fact]
+    public async Task TheDecisionScript_PassesItsOwnCases()
+    {
+        var info = new ProcessStartInfo(Bash())
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        info.ArgumentList.Add(RepoPaths.File("base-project/.github/scripts/front-end-only.test.sh").Replace('\\', '/'));
+
+        using var process = Process.Start(info)!;
+        var stderr = process.StandardError.ReadToEndAsync();
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var output = stdout + await stderr;
+
+        process.ExitCode.ShouldBe(0, output);
+        output.ShouldContain("ok   file renamed into src/ui/", Case.Sensitive, output);
+    }
+
+    // On Windows a bare "bash" can resolve to WSL, which cannot see this path.
+    private static string Bash()
+    {
+        var git = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
+        return OperatingSystem.IsWindows() && File.Exists(git) ? git : "bash";
     }
 
     // A Windows checkout with core.autocrlf would otherwise give bash a CRLF script.
