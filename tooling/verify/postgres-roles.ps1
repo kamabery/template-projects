@@ -133,10 +133,14 @@ GRANT azure_pg_admin TO pgadmin;
     Write-Host "`n# Destroy, then the next deploy"
     $r = Psql 'DROP DATABASE b_appdb;'; if (-not $r.Ok) { throw $r.Out }
     $r = Psql 'SELECT 1;' -user preview_b -pw 'b-pw'
-    Check 'a destroyed preview''s login stops working' (-not $r.Ok) 'it can still log in to the postgres database until the next deploy''s sweep'
+    # Accepted: a destroy runs in HCP, outside the firewall, so it cannot drop the role. See "On the
+    # platform" in IaC/README.md.
+    Check 'accepted: a destroyed preview''s login lasts until the next deploy''s sweep, and no longer' $r.Ok $r.Out
     $r = Psql $Sweep
     Check 'the next deploy''s sweep runs' $r.Ok $r.Out
     Check 'that sweep removes the destroyed preview''s role' (-not (Role-Exists 'preview_b'))
+    $r = Psql 'SELECT 1;' -user preview_b -pw 'b-pw'
+    Check 'and then its login is refused' (-not $r.Ok) $r.Out
 
     Write-Host "`n# Race: a sweep lands between another preview's CREATE ROLE and its ALTER DATABASE OWNER"
     New-Database 'c_appdb'

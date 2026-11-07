@@ -1,0 +1,31 @@
+# Check 4. Pushed to a branch of a verify-* repo, as a job's branch could be: what can a workflow there
+# read in the shared vault? It reports only whether each read worked, never a value.
+name: verify-identity
+
+on:
+  push:
+    branches: [verify-identity]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: try each secret
+        run: |
+          for secret in __SECRETS__; do
+            if az keyvault secret show --vault-name __VAULT__ --name "$secret" --query id -o none 2>/dev/null; then
+              echo "probe $secret: readable"
+            else
+              echo "probe $secret: denied"
+            fi
+          done
