@@ -4,7 +4,9 @@ namespace AspireStarter.Cli.Tests;
 
 public class JsonMemberEditorTests
 {
-    private const string Settings = """
+    // A raw string literal takes the source file's line endings, so this is pinned to LF: on a CRLF
+    // checkout the input would otherwise not be what the assertions below describe.
+    private static readonly string Settings = """
         {
           // a comment, with a "Quoted": { brace
           "Database": {
@@ -14,7 +16,7 @@ public class JsonMemberEditorTests
             "LogLevel": { "Default": "Information" }
           }
         }
-        """;
+        """.ReplaceLineEndings("\n");
 
     private const string Events = """
           "Events": {
@@ -46,6 +48,19 @@ public class JsonMemberEditorTests
 
         outcome.ShouldBe(EditOutcome.AppliedByFallback);
         result.TrimEnd().ShouldEndWith("\"Events\": {\n    \"Enabled\": false\n  }\n}");
+    }
+
+    // A middle member, the last member, and the missing-anchor fallback.
+    [Theory]
+    [InlineData("Database")]
+    [InlineData("Logging")]
+    [InlineData("Nope")]
+    public void CrlfFile_GetsTheSameEditInCrlf(string after)
+    {
+        var (fromLf, _) = JsonMemberEditor.Insert(Settings, after, Events);
+        var (fromCrlf, _) = JsonMemberEditor.Insert(Settings.ReplaceLineEndings("\r\n"), after, Events);
+
+        fromCrlf.ShouldBe(fromLf.ReplaceLineEndings("\r\n"));
     }
 
     [Fact]

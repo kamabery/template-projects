@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AspireStarter.Cli.Editing;
 
 namespace AspireStarter.Cli;
 
@@ -34,6 +35,7 @@ internal static class ManifestStore
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
+        NewLine = "\n",
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
@@ -51,6 +53,10 @@ internal static class ManifestStore
         JsonSerializer.Deserialize<Manifest>(File.ReadAllText(Path.Combine(root, FileName)), Options)
         ?? throw new CliException($"{FileName} is empty.");
 
-    public static void Save(string root, Manifest manifest) =>
-        File.WriteAllText(Path.Combine(root, FileName), JsonSerializer.Serialize(manifest, Options) + "\n");
+    public static void Save(string root, Manifest manifest)
+    {
+        var path = Path.Combine(root, FileName);
+        var restore = File.Exists(path) ? Text.Normalize(File.ReadAllText(path)).Restore : s => s;
+        File.WriteAllText(path, restore(JsonSerializer.Serialize(manifest, Options) + "\n"));
+    }
 }

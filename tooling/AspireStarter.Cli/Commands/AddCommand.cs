@@ -111,8 +111,8 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
 
     private AddReport Apply(string root, string temp, Manifest manifest, AddOnEntry entry, AddOptions options)
     {
-        // 1. Files. One that already exists byte-identical is skipped - both UI templates ship the
-        //    same docs/DESIGN.md - and one that exists with different content stops the run.
+        // 1. Files. One that already exists identical, line endings aside, is skipped - both UI
+        //    templates ship the same docs/DESIGN.md - and one with different content stops the run.
         var added = new List<string>();
         var identical = new List<string>();
         var conflicts = new List<string>();
@@ -123,7 +123,7 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
 
             var target = Path.Combine(root, rel);
             if (!File.Exists(target)) added.Add(rel);
-            else if (File.ReadAllBytes(target).AsSpan().SequenceEqual(File.ReadAllBytes(path))) identical.Add(rel);
+            else if (Text.SameIgnoringLineEndings(File.ReadAllBytes(target), File.ReadAllBytes(path))) identical.Add(rel);
             else conflicts.Add(rel);
         }
         if (conflicts.Count > 0)

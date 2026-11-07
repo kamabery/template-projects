@@ -4,7 +4,9 @@ namespace AspireStarter.Cli.Tests;
 
 public class AnchorEditorTests
 {
-    private const string AppHost = """
+    // A raw string literal takes the source file's line endings, so these are pinned to LF: on a
+    // CRLF checkout the input would otherwise not be what the assertions below describe.
+    private static readonly string AppHost = """
         #:sdk Aspire.AppHost.Sdk@13.5.1
         #:package Aspire.Hosting.PostgreSQL@13.5.1
         // <<addon-packages>> - scaffolding inserts add-on #:package directives above this line.
@@ -17,7 +19,7 @@ public class AnchorEditorTests
         // <<addon-publish>> - scaffolding inserts add-on publish-time configuration below this line.
 
         builder.Build().Run();
-        """;
+        """.ReplaceLineEndings("\n");
 
     private static string WithoutMarkers(string text) =>
         string.Join('\n', text.Split('\n').Where(l => !l.Contains("<<addon-")));
@@ -77,7 +79,7 @@ public class AnchorEditorTests
             AnchorEditor.Insert("var x = 1;\n", "<<addon-resources>>", "below", "var ui = 1;"));
     }
 
-    private const string Slnx = """
+    private static readonly string Slnx = """
         <Solution>
           <Folder Name="/src/">
             <Project Path="src/a/a.csproj" />
@@ -86,7 +88,7 @@ public class AnchorEditorTests
             <Project Path="tests/a.tests/a.tests.csproj" />
           </Folder>
         </Solution>
-        """;
+        """.ReplaceLineEndings("\n");
 
     [Fact]
     public void MissingSlnxMarker_FallsBackToTheEndOfTheMatchingFolder()
@@ -104,5 +106,30 @@ public class AnchorEditorTests
 
         outcome.ShouldBe(EditOutcome.AppliedByFallback);
         result.ShouldContain("  <Folder Name=\"/src/ui/blazor/\">\n    <Project Path=\"src/ui/b/b.csproj\" />\n  </Folder>\n</Solution>", Case.Sensitive);
+    }
+
+    // Every insertion path: at a marker, and each structural fallback.
+    [Theory]
+    [InlineData("<<addon-packages>>", "above", "#:package A@1", false)]
+    [InlineData("<<addon-resources>>", "below", "var ui = 1;", false)]
+    [InlineData("<<addon-packages>>", "above", "#:package A@1", true)]
+    [InlineData("<<addon-resources>>", "below", "var ui = 1;", true)]
+    public void CrlfAppHost_GetsTheSameEditInCrlf(string marker, string pos, string body, bool withoutMarkers)
+    {
+        ShouldGetTheSameEditInCrlf(withoutMarkers ? WithoutMarkers(AppHost) : AppHost, marker, pos, body);
+    }
+
+    [Theory]
+    [InlineData("<<addon-test-projects>>")]
+    [InlineData("<<addon-ui-projects>>")]
+    public void CrlfSlnx_GetsTheSameEditInCrlf(string marker) =>
+        ShouldGetTheSameEditInCrlf(Slnx, marker, "above", "    <Project Path=\"b/b.csproj\" />");
+
+    private static void ShouldGetTheSameEditInCrlf(string lfSource, string marker, string pos, string body)
+    {
+        var (fromLf, _) = AnchorEditor.Insert(lfSource, marker, pos, body);
+        var (fromCrlf, _) = AnchorEditor.Insert(lfSource.ReplaceLineEndings("\r\n"), marker, pos, body);
+
+        fromCrlf.ShouldBe(fromLf.ReplaceLineEndings("\r\n"));
     }
 }

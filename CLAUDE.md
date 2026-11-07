@@ -1051,8 +1051,8 @@ exists — and, since the scaffolding skill uses it too, at creation as well. Fo
   set; an unannotated fence is prose. The wiring file is still the single source, and
   `WiringParserTests` pins the block count of each one against the real files.
 - **Nothing half-applied.** The add-on is instantiated in a temp directory; a file that exists
-  byte-identical is skipped (that is how two front ends share `docs/DESIGN.md`), one that differs
-  refuses the run; every edit is planned in memory and written only if all of them resolve. A block
+  identical, line endings aside, is skipped (that is how two front ends share `docs/DESIGN.md`), one
+  that differs refuses the run; every edit is planned in memory and written only if all of them resolve. A block
   whose first code line is already present is skipped, which makes a re-run harmless.
 - **Markers, else structure.** A missing `<<addon-*>>` marker falls back to placement by structure:
   after the last `#:` directive, before the top-level statement calling `builder.Build()` (Roslyn),
