@@ -55,9 +55,7 @@ function Test-Suites {
     , $red
 }
 
-# LF, whatever this machine's core.autocrlf says: nine CLI tests fail on a CRLF checkout, because their
-# raw string literals take the source file's line endings and the editors under test insert LF.
-git -C $repo -c core.autocrlf=false worktree add -q --detach $work HEAD
+git -C $repo worktree add -q --detach $work HEAD
 if ($LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
 try {
     Write-Host "HEAD $(git -C $work rev-parse --short HEAD), worktree $work"
