@@ -109,7 +109,7 @@ file in rather than by merging into one. That is why no `<<addon->>` marker exis
 | `aspire-base` | all of `IaC/` except the add-on files below |
 | `aspire-ui-react` | `frontend.react.tf` |
 | `aspire-ui-blazor` | `frontend.blazor-web.tf` (dropped by `template.json` when `--web false`) |
-| `aspire-events` | `containerapp.events.tf`, `servicebus.tf` |
+| `aspire-events` | `containerapp.events.tf`, `servicebus.tf`, `functions.tf`, `tests/platform.events.tftest.hcl` |
 | `aspire-auth` | `auth.entra-external.tf`, `tests/auth.tftest.hcl`, and `auth.redirects.react.tf` or `auth.redirects.blazor-web.tf` per `--frontend`; its wiring inserts `Auth__*` below `<<addon-api-env>>` in `containerapp.api.tf` |
 
 The data store is the exception, and has to be: `containerapp.api.tf` must reference whichever
