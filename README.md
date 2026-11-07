@@ -80,6 +80,19 @@ the new project lives somewhere else.
    "Scaffolding by hand" below. If you skip this, the skills do it on first
    use from `ASPIRE_STARTER_DIR`.
 
+   > **An installed `aspire-addon` does not update itself.** After pulling or
+   > changing `tooling/AspireStarter.Cli`, rebuild and update it, from this
+   > workspace's root:
+   >
+   > ```powershell
+   > dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
+   > dotnet tool update -g AspireStarter.Addon --configfile tooling/install.nuget.config
+   > ```
+   >
+   > The version stays `1.0.0`, so `dotnet tool list` cannot tell you whether
+   > this worked. Check that `~/.dotnet/tools/aspire-addon.exe` has a new
+   > timestamp.
+
 ### Creating a project
 
 Open Claude Code in the directory that should **contain** the new project
@@ -125,7 +138,8 @@ with `aspire-addon adopt`.
   not, takes effect at the next session start or after `/reload-plugins`.
   `claude plugin update` reports "nothing to update" for that reason.
 - **Templates or CLI changed:** rebuild and reinstall both (see "Scaffolding
-  by hand"). `aspire-addon` refuses to add to a scaffold whose recorded pack
+  by hand", and step 3 of "One-time setup" for updating an installed CLI).
+  `aspire-addon` refuses to add to a scaffold whose recorded pack
   version differs from the installed one; upgrading a scaffold is not built.
 
 ## Scaffolding by hand
