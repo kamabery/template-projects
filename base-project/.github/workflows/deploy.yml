@@ -243,16 +243,20 @@ jobs:
           echo "::add-mask::$admin_pw"
           echo "::add-mask::$role_pw"
           export PGPASSWORD="$admin_pw" PGSSLMODE=require PGHOST="$DB_FQDN" PGUSER=pgadmin PGDATABASE=postgres
-          psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" -v pw="$role_pw" <<'SQL'
+          # Previews deploy side by side on this server. The role and its databases' ownership commit
+          # together, because a sweep drops a role that owns nothing, and the lock takes sweeps one at a
+          # time, because two that drop the same role fail.
+          psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" -v pw="$role_pw" -v dbs="$DB_NAMES" <<'SQL'
+          BEGIN;
+          SELECT pg_advisory_xact_lock(7242001);
           SELECT format('CREATE ROLE %I LOGIN', :'role') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
           SELECT format('ALTER ROLE %I PASSWORD %L', :'role', :'pw') \gexec
           SELECT format('GRANT %I TO CURRENT_USER', :'role') \gexec
+          SELECT format('ALTER DATABASE %I OWNER TO %I', db, :'role') FROM unnest(string_to_array(:'dbs', ' ')) db \gexec
+          SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', db) FROM unnest(string_to_array(:'dbs', ' ')) db \gexec
+          COMMIT;
           SQL
           for db in $DB_NAMES; do
-            psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" -v db="$db" <<'SQL'
-          SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role') \gexec
-          SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
-          SQL
             # Azure's public schema belongs to azure_pg_admin, not the database's owner, so owning the
             # database does not let the role create tables in it (42501, canary 21).
             PGDATABASE="$db" psql -v ON_ERROR_STOP=1 -q -v role="$DB_ROLE" <<'SQL'
@@ -260,8 +264,11 @@ jobs:
           SQL
           done
           psql -v ON_ERROR_STOP=1 -q <<'SQL'
+          BEGIN;
+          SELECT pg_advisory_xact_lock(7242001);
           SELECT format('DROP ROLE %I', r.rolname) FROM pg_roles r
            WHERE r.rolname LIKE 'preview\_%' AND NOT EXISTS (SELECT FROM pg_database d WHERE d.datdba = r.oid) \gexec
+          COMMIT;
           SQL
 
       # Migrations are Development-only inside the application, deliberately: a deployment must not

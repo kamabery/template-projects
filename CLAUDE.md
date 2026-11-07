@@ -124,6 +124,8 @@ event-project/                 the optional Wolverine event-sourcing slice; see 
 templating/                    stage.ps1 + one template.json per template + the wiring files
 packaging/                     the template pack's .csproj; NOT in template.slnx, deliberately
 tooling/                       the aspire-addon CLI + its tests (tooling.slnx); NOT in template.slnx
+tooling/verify/                checks on the deploy path no suite can run, independent of the factory:
+                               mutations.ps1 (no Azure, no Docker), postgres-roles.ps1 (Docker)
 artifacts/                     generated: staged template trees and the .nupkgs. Not source.
 specs/                         design proposals; see "specs/ — proposals not yet implemented"
 ```

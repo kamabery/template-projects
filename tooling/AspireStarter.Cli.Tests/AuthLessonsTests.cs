@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace AspireStarter.Cli.Tests;
 
 /// <summary>What J-022 learned the sign-in add-on must do, where no offline plan or test run can see it.</summary>
@@ -61,6 +63,16 @@ public sealed class AuthLessonsTests
         link.ShouldContain("error_message_regex");
         link.ShouldContain("The application id");
         link.ShouldContain("azuread_service_principal.spa");
+    }
+
+    // The message canary 24 failed on, word for word: a retry that does not match it never fires.
+    [Fact]
+    public void TheUserFlowLinkRetry_MatchesTheRealError()
+    {
+        var pattern = Regex.Match(Entra, "error_message_regex = \\[\"(.*?)\"\\]").Groups[1].Value;
+
+        pattern.ShouldNotBeEmpty();
+        Regex.IsMatch("The application id be067116-791b-48d6-b059-6d7b03470f65 is invalid", pattern).ShouldBeTrue();
     }
 
     // The ids belong in the target's tfvars, one source (J-022): a -var-file overrides the set anyway.

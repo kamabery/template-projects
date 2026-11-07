@@ -45,6 +45,49 @@ public sealed class DeployWorkflowTests
         File.ReadAllText(RepoPaths.File(rel)).ShouldNotContain("\r");
     }
 
+    // A fresh preview has no token to publish with, so it must take the full path whatever changed.
+    [Fact]
+    public void AFrontEndOnlyDeploy_NeedsTheEnvironmentToHaveBeenApplied()
+    {
+        Workflow.ShouldContain("""elif [ -z "$(terraform output -raw "$key" 2>/dev/null || true)" ]; then""");
+    }
+
+    // The shared server's isolation, which only tooling/verify/postgres-roles.ps1 can run: without the
+    // REVOKE any login can connect to any preview's database.
+    [Fact]
+    public void APreviewsDatabases_AreClosedToEveryOtherLogin()
+    {
+        LoginStep().ShouldContain("REVOKE ALL ON DATABASE %I FROM PUBLIC");
+    }
+
+    // Without the name filter this drops every role that owns no database, on a server previews share.
+    [Fact]
+    public void TheSweep_OnlyTouchesPreviewRoles()
+    {
+        LoginStep().ShouldContain(@"r.rolname LIKE 'preview\_%' AND");
+    }
+
+    // Unlocked, a sweep dropped a role another deploy had just created, and 12 of 20 pairs of sweeps
+    // failed with "could not find tuple for role". See tooling/verify/postgres-roles.ps1.
+    [Theory]
+    [InlineData("CREATE ROLE")]
+    [InlineData("DROP ROLE")]
+    public void RolesChange_InOneTransaction_UnderTheOneLock(string statement)
+    {
+        LoginStep().ShouldContain($"""
+            BEGIN;
+            SELECT pg_advisory_xact_lock(7242001);
+            SELECT format('{statement}
+            """.ReplaceLineEndings("\n").Replace("\n", "\n          "));
+    }
+
+    private static string LoginStep()
+    {
+        var workflow = Workflow.ReplaceLineEndings("\n");
+        var from = workflow.IndexOf("- name: create the preview's database login", StringComparison.Ordinal);
+        return workflow[from..workflow.IndexOf("# Migrations are Development-only", from, StringComparison.Ordinal)];
+    }
+
     // The decision itself, not its text: the script's own cases run against a throwaway git repo.
     [Fact]
     public async Task TheDecisionScript_PassesItsOwnCases()
