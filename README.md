@@ -187,5 +187,40 @@ publishes. `IaC/README.md` has the walkthrough and the failure modes.
 Nothing here is ever applied from this workspace — it is template source, not a
 deployed application. `terraform validate` is the check that runs.
 
+### Testing the IaC for real
+
+`tooling/verify/standalone.ps1` deploys a fresh postgres + React scaffold from the current commit to
+Azure, with nothing borrowed from claude-factory: its own HCP Terraform organization, its own Entra
+apps and its own private GitHub repository. It is the check that the templates work for someone who
+has never seen the factory.
+
+One-time setup:
+
+1. **An HCP Terraform organization used for nothing else** (the free plan is enough). In its
+   *Settings → Teams → owners*, create a team token.
+2. **Two user-scope environment variables.** The organization's name is configuration, not code:
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable('STANDALONE_HCP_ORG', '<your-org>', 'User')
+   $t = Read-Host 'Token' -AsSecureString; [Environment]::SetEnvironmentVariable('STANDALONE_HCP_TOKEN', [Net.NetworkCredential]::new('', $t).Password, 'User'); Remove-Variable t
+   ```
+
+   The script refuses a token that can see any organization but that one.
+3. **Sign-ins.** `az login` as someone who can create app registrations and grant roles on the
+   subscription, and `gh auth login`. GitHub needs SSH for the push, and Cleanup needs
+   `gh auth refresh -s delete_repo`.
+
+Then, from the workspace root:
+
+```powershell
+pwsh tooling/verify/standalone.ps1 -Mode Setup      # pack, scaffold, Entra apps, HCP, repo
+pwsh tooling/verify/standalone.ps1 -Mode Deploy     # deploy.yml for dev, then a smoke test
+pwsh tooling/verify/standalone.ps1 -Mode Teardown   # destroy through HCP
+pwsh tooling/verify/standalone.ps1 -Mode Cleanup    # everything but the organization
+```
+
+It deploys to `centralus` (`-Location` changes it) and creates real, billed resources until
+Teardown. `IaC/README.md`, *Setting up the deploy workflow*, describes each thing Setup creates.
+
 See `CLAUDE.md` for the full workspace layout, architecture notes, and the
 rules that keep this repo template-ready.
