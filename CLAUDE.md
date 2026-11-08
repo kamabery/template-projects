@@ -291,8 +291,10 @@ dotnet pack packaging/AspireStarter.Templates.csproj -c Release -o artifacts/nup
 dotnet new uninstall AspireStarter.Templates
 dotnet new install artifacts/nupkg/AspireStarter.Templates.1.0.0.nupkg
 
-# The aspire-addon CLI: test, pack, install. Reinstall after a rebuild with `dotnet tool update`
-# and the same --configfile. The plain add-source flag is refused under package source mapping.
+# The aspire-addon CLI: test, pack, install. Reinstall after a rebuild with `dotnet tool uninstall -g
+# AspireStarter.Addon`, then this install again - NOT `dotnet tool update`, which sees the same 1.0.0
+# and keeps the old build. The installed DLL's ProductVersion ends +<commit> it was built from.
+# The plain add-source flag is refused under package source mapping.
 dotnet test tooling/tooling.slnx
 dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
 dotnet tool install -g AspireStarter.Addon --configfile tooling/install.nuget.config
@@ -1070,7 +1072,7 @@ exists — and, since the scaffolding skill uses it too, at creation as well. Fo
 - `templating/wiring/*.wiring.md` duplicates the resource blocks that live in `.aspire/apphost.cs`.
   Nothing enforces that they agree; the scaffold matrix is what catches drift.
 - Staging needs PowerShell 7 on `PATH`. Fine for a maintainer, a constraint for CI.
-- `aspire-addon` covers today's three add-ons. A second resource (`add resource`), new capability
+- `aspire-addon` covers today's four add-ons (events, ui-react, ui-blazor, auth). A second resource (`add resource`), new capability
   add-ons, `upgrade`, and adding MAUI to an existing Blazor web host are not built.
 
 ### Agent-facing contract

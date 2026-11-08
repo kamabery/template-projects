@@ -81,17 +81,22 @@ the new project lives somewhere else.
    use from `ASPIRE_STARTER_DIR`.
 
    > **An installed `aspire-addon` does not update itself.** After pulling or
-   > changing `tooling/AspireStarter.Cli`, rebuild and update it, from this
+   > changing `tooling/AspireStarter.Cli`, rebuild and reinstall it, from this
    > workspace's root:
    >
    > ```powershell
    > dotnet pack tooling/AspireStarter.Cli -c Release -o artifacts/nupkg
-   > dotnet tool update -g AspireStarter.Addon --configfile tooling/install.nuget.config
+   > dotnet tool uninstall -g AspireStarter.Addon
+   > dotnet tool install -g AspireStarter.Addon --configfile tooling/install.nuget.config
    > ```
    >
-   > The version stays `1.0.0`, so `dotnet tool list` cannot tell you whether
-   > this worked. Check that `~/.dotnet/tools/aspire-addon.exe` has a new
-   > timestamp.
+   > Not `dotnet tool update`: the version stays `1.0.0`, so it reports
+   > "already installed" and keeps the old build. To see which commit the
+   > installed one was built from (the part after `+`):
+   >
+   > ```powershell
+   > [Diagnostics.FileVersionInfo]::GetVersionInfo((Get-ChildItem ~/.dotnet/tools/.store/aspirestarter.addon -Recurse -Filter AspireStarter.Cli.dll)[0].FullName).ProductVersion
+   > ```
 
 ### Creating a project
 
