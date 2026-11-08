@@ -98,7 +98,7 @@ function Invoke-Setup {
 <packageSourceMapping><packageSource key="local"><package pattern="AspireStarter.*" /></packageSource><packageSource key="nuget.org"><package pattern="*" /></packageSource></packageSourceMapping></configuration>
 "@ | Set-Content "$Work\tool.nuget.config"
     # Private hive, tool path and package cache, so the global ones stay as they are.
-    $env:DOTNET_CLI_HOME = "$Work\home"; $env:PATH = "$Work\tools;$env:PATH"; $env:NUGET_PACKAGES = "$Work\nuget"
+    $env:DOTNET_NOLOGO = '1'; $env:DOTNET_CLI_HOME = "$Work\home"; $env:PATH = "$Work\tools;$env:PATH"; $env:NUGET_PACKAGES = "$Work\nuget"
     dotnet tool install AspireStarter.Addon --tool-path "$Work\tools" --configfile "$Work\tool.nuget.config" | Out-Null; Native 'tool install'
     dotnet new install "$Work\nupkg\AspireStarter.Templates.1.0.0.nupkg" | Out-Null; Native 'dotnet new install'
 
@@ -116,7 +116,7 @@ function Invoke-Setup {
         } finally { Pop-Location }
         $tfvars = Join-Path $App "IaC\envs\$Environment.tfvars"
         [IO.File]::WriteAllText($tfvars, (Set-TfvarLines ([IO.File]::ReadAllText($tfvars)) ([ordered]@{ location = "`"$Location`"" })))
-        git init -q -b main; git add -A; git -c user.name=verify -c user.email=verify@localhost commit -q -m "scaffold from template-projects $sha"; Native 'git commit'
+        git init -q -b main; git -c core.safecrlf=false add -A; git -c user.name=verify -c user.email=verify@localhost commit -q -m "scaffold from template-projects $sha"; Native 'git commit'
     } finally { Pop-Location }
 
     Say 'Entra: one app for HCP (Contributor, User Access Administrator), one for GitHub (Contributor)'
