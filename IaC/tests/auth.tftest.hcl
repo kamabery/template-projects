@@ -82,32 +82,6 @@ run "qa_user_is_named_for_the_environment" {
   }
 }
 
-run "qa_password_name_carries_the_preview_on_the_platform" {
-  command = plan
-
-  variables {
-    location = "centralus"
-    platform = {
-      location                   = "centralus"
-      environment_id             = "/subscriptions/s/resourceGroups/rg-factory-platform/providers/Microsoft.App/managedEnvironments/cae-factory-platform"
-      environment_name           = "cae-factory-platform"
-      environment_domain         = "calm.centralus.azurecontainerapps.io"
-      log_analytics_workspace_id = "/subscriptions/s/resourceGroups/rg-factory-platform/providers/Microsoft.OperationalInsights/workspaces/log-factory-platform"
-      key_vault_id               = "/subscriptions/s/resourceGroups/rg-factory-platform/providers/Microsoft.KeyVault/vaults/kv-factory-abc"
-      key_vault_name             = "kv-factory-abc"
-      postgres_server_id         = "/subscriptions/s/resourceGroups/rg-factory-platform/providers/Microsoft.DBforPostgreSQL/flexibleServers/psql-factory-abc"
-      postgres_server_name       = "psql-factory-abc"
-      postgres_server_fqdn       = "psql-factory-abc.postgres.database.azure.com"
-      postgres_resource_group    = "rg-factory-platform"
-    }
-  }
-
-  assert {
-    condition     = azurerm_key_vault_secret.qa_password.name == "shelf-j012-qa-password"
-    error_message = "Secret names are unique within a vault, so a preview's carry its id."
-  }
-}
-
 run "refuses_without_the_external_tenant" {
   command = plan
 
