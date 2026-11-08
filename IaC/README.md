@@ -130,8 +130,10 @@ GitHub environment. Nothing else; this is the whole list. For environment `dev` 
    list-skus` lists it; `centralus` is the region the previews use.
 
 Then run the workflow with `environment = dev`, and smoke-test through `<react_url>/api/...`. To tear
-down, delete the `Failure Anomalies` alert rule in the resource group (dev keeps the refusal described
-below), then queue a destroy run on the workspace.
+down, queue a destroy run on the workspace. dev keeps the refusal described below, so the resource
+group is not deleted while Azure's `Failure Anomalies` alert rule is in it: delete that rule while the
+destroy runs, not only before it, because Azure can create it ten minutes or more after Application
+Insights.
 
 ## On the platform
 
