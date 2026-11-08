@@ -95,6 +95,44 @@ npm --prefix src/ui/react run build
 swa deploy src/ui/react/dist --deployment-token "$(terraform output -raw react_api_key)" --env production
 ```
 
+## Setting up the deploy workflow
+
+`.github/workflows/deploy.yml` needs an HCP Terraform organization, two Entra app registrations and a
+GitHub environment. Nothing else; this is the whole list. For environment `dev` of a repository
+`<owner>/<repo>`:
+
+1. **HCP Terraform.** An organization, a team token for it, a project named `<repo>`, and a workspace
+   `<repo>-dev` in that project, execution mode remote. A variable set applied to the project:
+
+   | Key | Category | Value |
+   | --- | --- | --- |
+   | `TFC_AZURE_PROVIDER_AUTH` | env | `true` |
+   | `TFC_AZURE_RUN_CLIENT_ID` | env | the HCP app's client id (step 2) |
+   | `ARM_SUBSCRIPTION_ID`, `ARM_TENANT_ID` | env | the target subscription and its tenant |
+   | `deployer_object_id` | terraform | the GitHub app's service principal object id (step 3) |
+
+   One dynamic-credential configuration is enough; `providers.tf` reads it either way.
+2. **An Entra app for HCP.** Contributor and User Access Administrator on the subscription (Terraform
+   creates role assignments). Two federated credentials, issuer `https://app.terraform.io`, audience
+   `api://AzureADTokenExchange`, subjects
+   `organization:<org>:project:<repo>:workspace:<repo>-dev:run_phase:plan` and the same ending
+   `run_phase:apply`.
+3. **An Entra app for GitHub Actions.** Contributor on the subscription: it builds images, opens the
+   database firewall for the runner and reads the connection string, which `deployer_object_id`
+   grants. One federated credential, issuer `https://token.actions.githubusercontent.com`, subject
+   `<sub_claim_prefix>:environment:dev` - read the prefix first (see below), because a new repository
+   presents an immutable one.
+4. **GitHub.** An environment `dev` with variables `AZURE_CLIENT_ID` (the GitHub app),
+   `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`, and the secret `TF_API_TOKEN` (the HCP token). A
+   repository variable `TF_CLOUD_ORGANIZATION`.
+5. **The region.** `envs/dev.tfvars` and `envs/staging.tfvars` say `eastus2`. Some subscriptions are
+   refused `Standard_B1ms` Postgres there (`SkuNotAvailable`) even though `az postgres flexible-server
+   list-skus` lists it; `centralus` is the region the previews use.
+
+Then run the workflow with `environment = dev`, and smoke-test through `<react_url>/api/...`. To tear
+down, delete the `Failure Anomalies` alert rule in the resource group (dev keeps the refusal described
+below), then queue a destroy run on the workspace.
+
 ## On the platform
 
 A `j<NNN>` preview runs on the factory's shared platform when the HCP variable set carries `platform`
