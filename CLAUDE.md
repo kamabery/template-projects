@@ -1072,6 +1072,8 @@ exists — and, since the scaffolding skill uses it too, at creation as well. Fo
 - `templating/wiring/*.wiring.md` duplicates the resource blocks that live in `.aspire/apphost.cs`.
   Nothing enforces that they agree; the scaffold matrix is what catches drift.
 - Staging needs PowerShell 7 on `PATH`. Fine for a maintainer, a constraint for CI.
+- `specs/aspire-addon-day2.md` proposes the next three items: versioning with `upgrade`, MAUI on an
+  existing Blazor host, and `add resource`.
 - `aspire-addon` covers today's four add-ons (events, ui-react, ui-blazor, auth). A second resource (`add resource`), new capability
   add-ons, `upgrade`, and adding MAUI to an existing Blazor web host are not built.
 
