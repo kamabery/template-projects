@@ -1,6 +1,7 @@
 project_name = "template"
 environment  = "dev"
-location     = "eastus2"
+# eastus2 refuses Standard_B1ms Postgres (SkuNotAvailable) on some subscriptions; centralus does not.
+location = "centralus"
 
 # Cheap and slow-to-wake. Set api_min_replicas = 1 to remove the cold start.
 api_min_replicas = 0

@@ -17,7 +17,7 @@ variable "environment" {
 variable "location" {
   description = "Azure region. Static Web Apps are not available in every region; eastus2, westus2, centralus, westeurope and eastasia are the safe ones."
   type        = string
-  default     = "eastus2"
+  default     = "centralus"
 }
 
 variable "subscription_id" {

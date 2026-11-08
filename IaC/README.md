@@ -125,9 +125,10 @@ GitHub environment. Nothing else; this is the whole list. For environment `dev` 
 4. **GitHub.** An environment `dev` with variables `AZURE_CLIENT_ID` (the GitHub app),
    `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`, and the secret `TF_API_TOKEN` (the HCP token). A
    repository variable `TF_CLOUD_ORGANIZATION`.
-5. **The region.** `envs/dev.tfvars` and `envs/staging.tfvars` say `eastus2`. Some subscriptions are
-   refused `Standard_B1ms` Postgres there (`SkuNotAvailable`) even though `az postgres flexible-server
-   list-skus` lists it; `centralus` is the region the previews use.
+5. **The region.** Every environment defaults to `centralus`. `eastus2` refuses `Standard_B1ms`
+   Postgres on some subscriptions (`SkuNotAvailable`) even though `az postgres flexible-server
+   list-skus` lists it, and B1ms is the cheapest size there is. Before choosing another region, try
+   creating a B1ms server there once: the SKU list cannot tell you.
 
 Then run the workflow with `environment = dev`, and smoke-test through `<react_url>/api/...`. To tear
 down, queue a destroy run on the workspace. dev keeps the refusal described below, so the resource
