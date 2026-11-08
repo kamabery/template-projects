@@ -472,6 +472,7 @@ $n += Copy-Tree -From (Join-Path $RepoRoot 'IaC') -To (Join-Path $base 'IaC') -E
     'containerapp.events.tf',
     'servicebus.tf',
     'functions.tf',
+    'tests/events.tftest.hcl',
     'auth.entra-external.tf',
     'auth.redirects.react.tf',
     'auth.redirects.blazor-web.tf',
@@ -566,7 +567,7 @@ foreach ($project in @('template.events', 'template.events.polecat', 'template.e
 
 # All three ship on every event store: every host publishes to Service Bus once deployed, and the
 # Function that consumes it is store-agnostic.
-Copy-IacFiles -Root $events -Files @('containerapp.events.tf', 'servicebus.tf', 'functions.tf')
+Copy-IacFiles -Root $events -Files @('containerapp.events.tf', 'servicebus.tf', 'functions.tf', 'tests/events.tftest.hcl')
 Assert-TerraformSubstitutionSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 Assert-ResourceTokenSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 

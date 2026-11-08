@@ -95,16 +95,10 @@ run "names_cannot_collide_on_the_platform" {
     condition     = azurerm_container_app.api.name == "ca-shelf-j012-api"
     error_message = "Container app names are unique within an environment, so a preview's carry its id."
   }
-  assert {
-    condition     = azurerm_container_app.events.name == "ca-shelf-j012-events"
-    error_message = "Container app names are unique within an environment, so a preview's carry its id."
-  }
+  # The events app and the QA password are add-on resources, so their names are asserted in the
+  # test files those add-ons ship. This one runs in every scaffold, including a base-only one.
   assert {
     condition     = output.appdb_connection_secret_name == "shelf-j012-appdb-connection"
-    error_message = "Secret names are unique within a vault, so a preview's carry its id."
-  }
-  assert {
-    condition     = azurerm_key_vault_secret.qa_password.name == "shelf-j012-qa-password"
     error_message = "Secret names are unique within a vault, so a preview's carry its id."
   }
   assert {
