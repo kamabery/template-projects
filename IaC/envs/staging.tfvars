@@ -1,6 +1,7 @@
 project_name = "template"
 environment  = "staging"
-location     = "eastus2"
+# eastus2 refuses Standard_B1ms Postgres (SkuNotAvailable) on some subscriptions; centralus does not.
+location = "centralus"
 
 api_min_replicas = 0
 api_max_replicas = 2

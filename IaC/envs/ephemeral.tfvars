@@ -1,6 +1,6 @@
 project_name = "template"
 # eastus2 refused B_Standard_B1ms for the factory's subscription (SkuNotAvailable, J-019); centralus
-# also offers Static Web Apps. dev and staging stay where the human put them.
+# also offers Static Web Apps. dev and staging use it too.
 location = "centralus"
 
 # One factory job's preview. The workflow passes -var environment=j<NNN> (the job id), which names
