@@ -1,6 +1,38 @@
 {
   "components": {
     "schemas": {
+      "AuthConfig": {
+        "properties": {
+          "authority": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "enabled",
+          "authority",
+          "clientId",
+          "scope"
+        ],
+        "type": "object"
+      },
       "ClientTelemetryConfig": {
         "properties": {
           "endpoint": {
@@ -26,6 +58,17 @@
           "endpoint",
           "protocol",
           "headers"
+        ],
+        "type": "object"
+      },
+      "CurrentUser": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -179,6 +222,37 @@
         "summary": "List every widget",
         "tags": [
           "Widgets"
+        ]
+      }
+    },
+    "/auth/config": {
+      "get": {
+        "operationId": "GetAuthConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Where a client signs in, or that it does not need to",
+        "tags": [
+          "Auth"
         ]
       }
     },
@@ -425,9 +499,63 @@
           "Harness"
         ]
       }
+    },
+    "/me": {
+      "get": {
+        "operationId": "GetCurrentUser",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Who the signed-in caller is",
+        "tags": [
+          "Auth"
+        ]
+      }
     }
   },
   "tags": [
+    {
+      "name": "Auth"
+    },
     {
       "name": "ClientTelemetry"
     },

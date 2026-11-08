@@ -17,7 +17,7 @@ variable "events_max_replicas" {
 
 resource "azurerm_container_app" "events" {
   name                         = local.events_app_name
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = local.container_app_environment_id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
   tags                         = local.tags
@@ -118,7 +118,7 @@ resource "azurerm_container_app" "events" {
         }
       }
 
-      # Not /health: MapDefaultEndpoints maps it in Development only and this runs as Production.
+      # Not /health: it includes the database check, so a probe on it restarts on a database blip.
       # /openapi/v1.json is mapped unconditionally in the events host's Program.cs.
       liveness_probe {
         transport = "HTTP"

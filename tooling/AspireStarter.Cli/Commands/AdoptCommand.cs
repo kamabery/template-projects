@@ -102,6 +102,9 @@ internal sealed partial class AdoptCommand(ITemplateRunner runner, TextWriter ou
             addOns.Add(new AddOnEntry { Id = "ui-blazor", Web = Directory.Exists(prefix + ".Web"), Maui = Directory.Exists(prefix) });
         }
 
+        // The realm import is the one file only the auth add-on brings.
+        if (Directory.Exists(Path.Combine(root, ".aspire", "keycloak"))) addOns.Add(new AddOnEntry { Id = "auth" });
+
         return addOns;
     }
 }

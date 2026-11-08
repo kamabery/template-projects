@@ -429,7 +429,8 @@ New-Item -ItemType Directory -Path $base -Force | Out-Null
 foreach ($f in @('template.slnx', 'aspire.config.json', 'nuget.config')) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot $f) -Destination (Join-Path $base $f) -Force
 }
-$n = Copy-Tree -From (Join-Path $RepoRoot '.aspire') -To (Join-Path $base '.aspire')
+# keycloak/ is the auth add-on's realm import, staged with that add-on, never with the base.
+$n = Copy-Tree -From (Join-Path $RepoRoot '.aspire') -To (Join-Path $base '.aspire') -ExcludePrefixes @('keycloak')
 $n += Copy-Tree -From $baseProject -To $base -ExcludePrefixes @(
     'src/ui',
     'tests/Template.Blazor.Maui.Tests',
@@ -458,7 +459,7 @@ Edit-StagedFile -Path (Join-Path $base '.aspire/apphost.cs') -Pairs @(
 )
 
 # React, Blazor and events are separate templates; their regions can never be true here.
-$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEventsMarten', 'includeEventsPolecat', 'includeEventsFisher')
+$falseForBase = @('includeReact', 'includeBlazorWeb', 'includeMaui', 'includeEventsMarten', 'includeEventsPolecat', 'includeEventsFisher', 'includeAuth')
 foreach ($rel in @('template.slnx', '.aspire/apphost.cs', '.aspire/appsettings.json')) {
     Remove-FalseRegions -Path (Join-Path $base $rel) -FalseSymbols $falseForBase
 }
@@ -470,7 +471,11 @@ $n += Copy-Tree -From (Join-Path $RepoRoot 'IaC') -To (Join-Path $base 'IaC') -E
     'frontend.blazor-web.tf',
     'containerapp.events.tf',
     'servicebus.tf',
-    'functions.tf'
+    'functions.tf',
+    'auth.entra-external.tf',
+    'auth.redirects.react.tf',
+    'auth.redirects.blazor-web.tf',
+    'tests/auth.tftest.hcl'
 )
 Assert-TerraformSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
 Assert-ResourceTokenSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
@@ -568,6 +573,20 @@ Assert-ResourceTokenSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 Add-TemplateConfig -Name 'aspire-events' -Root $events
 Assert-ProseSubstitutionSafe -Root $events -CopyOnly @('IaC/containerapp.events.tf')
 Write-Host "aspire-events     $n files"
+
+# --- aspire-auth ----------------------------------------------------------------------------------
+# The identity provider only: the API and both front ends already speak OIDC once Auth:* is set, so
+# this is Keycloak's realm for the AppHost and Entra External ID for Azure. Both redirect files are
+# staged and template.json keeps the one for the scaffold's front end.
+$auth = Join-Path $OutputRoot 'aspire-auth'
+$n = Copy-Tree -From (Join-Path $RepoRoot '.aspire/keycloak') -To (Join-Path $auth '.aspire/keycloak')
+$authIac = @('auth.entra-external.tf', 'auth.redirects.react.tf', 'auth.redirects.blazor-web.tf', 'tests/auth.tftest.hcl')
+Copy-IacFiles -Root $auth -Files $authIac
+$n += $authIac.Count
+Assert-TerraformSubstitutionSafe -Root $auth
+Add-TemplateConfig -Name 'aspire-auth' -Root $auth
+Assert-ProseSubstitutionSafe -Root $auth
+Write-Host "aspire-auth       $n files"
 
 Write-Host ""
 Write-Host "Staged to $OutputRoot"

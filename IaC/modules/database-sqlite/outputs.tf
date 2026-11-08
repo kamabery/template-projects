@@ -49,3 +49,20 @@ output "storage_account_name" {
   description = "Where the SQLite file lives. The deploy pipeline seeds the schema by uploading a locally-migrated file to this account's `data` share."
   value       = azurerm_storage_account.main.name
 }
+
+output "role_name" {
+  description = "Null: only a preview on the shared Postgres server has a login of its own."
+  value       = null
+}
+
+output "database_names" {
+  value = null
+}
+
+output "server_resource_group" {
+  value = null
+}
+
+output "server_fqdn" {
+  value = null
+}

@@ -41,3 +41,20 @@ output "storage_account_name" {
   description = "Null: only the SQLite branch keeps its store on a file share."
   value       = null
 }
+
+output "role_name" {
+  description = "Null: only a preview on the shared Postgres server has a login of its own."
+  value       = null
+}
+
+output "database_names" {
+  value = null
+}
+
+output "server_resource_group" {
+  value = var.resource_group_name
+}
+
+output "server_fqdn" {
+  value = azurerm_mssql_server.main.fully_qualified_domain_name
+}

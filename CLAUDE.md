@@ -124,6 +124,8 @@ event-project/                 the optional Wolverine event-sourcing slice; see 
 templating/                    stage.ps1 + one template.json per template + the wiring files
 packaging/                     the template pack's .csproj; NOT in template.slnx, deliberately
 tooling/                       the aspire-addon CLI + its tests (tooling.slnx); NOT in template.slnx
+tooling/verify/                checks on the deploy path no suite can run, independent of the factory:
+                               mutations.ps1 (no Azure, no Docker), postgres-roles.ps1 (Docker)
 artifacts/                     generated: staged template trees and the .nupkgs. Not source.
 specs/                         design proposals; see "specs/ — proposals not yet implemented"
 ```
@@ -861,7 +863,7 @@ document generator, no transitive dependencies (note it is *not* `SwaggerGen`, o
 The page has a working **Try it out** button; it is same-origin with the API, so it needs no CORS
 entry, and every asset is embedded, so it works offline. `RoutePrefix` must be set explicitly —
 it defaults to `swagger`, and `/api-docs` is what the AppHost link, the README and the tests
-expect; `SwaggerEndpoint` is what aims it at `MapOpenApi`'s document. Unlike `/health` and
+expect; `SwaggerEndpoint` is what aims it at `MapOpenApi`'s document. Unlike
 `/harness/*`, **neither route is gated on Development**; that is deliberate, and the README records
 the consequence — the document advertises the Development-only `/harness/*` endpoints, which are
 now one click from executing.
@@ -1049,8 +1051,8 @@ exists — and, since the scaffolding skill uses it too, at creation as well. Fo
   set; an unannotated fence is prose. The wiring file is still the single source, and
   `WiringParserTests` pins the block count of each one against the real files.
 - **Nothing half-applied.** The add-on is instantiated in a temp directory; a file that exists
-  byte-identical is skipped (that is how two front ends share `docs/DESIGN.md`), one that differs
-  refuses the run; every edit is planned in memory and written only if all of them resolve. A block
+  identical, line endings aside, is skipped (that is how two front ends share `docs/DESIGN.md`), one
+  that differs refuses the run; every edit is planned in memory and written only if all of them resolve. A block
   whose first code line is already present is skipped, which makes a re-run harmless.
 - **Markers, else structure.** A missing `<<addon-*>>` marker falls back to placement by structure:
   after the last `#:` directive, before the top-level statement calling `builder.Build()` (Roslyn),

@@ -63,7 +63,9 @@ and the current surface.
 exactly one value, so it breaks whichever theme it was not picked for; a literal radius or shadow drifts
 the moment one component is restyled. This includes an inline `style=` attribute carrying a colour a
 server handed you — pass it through a token or a `color-mix`, or it will not follow the theme and
-nothing will tell you.
+nothing will tell you. On the React side `npm run lint` catches raw palette colours, radii and
+shadows in class names (`scripts/check-design-tokens.mjs`; the style guide and a dialog's
+`backdrop:bg-black/NN` scrim are exempt). It cannot see an inline `style=` or a value built in code.
 
 **A class name is not a style.** Markup that emits `.kanban-board` and a stylesheet that never defines
 it both look finished, and every test still passes. If you emit a class, something must define it — a

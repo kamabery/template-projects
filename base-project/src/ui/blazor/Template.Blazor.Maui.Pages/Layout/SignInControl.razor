@@ -1,0 +1,25 @@
+@using Template.Blazor.Maui.Pages.Auth
+@implements IDisposable
+@inject ISignIn SignIn
+
+@* Nothing at all unless the host says sign-in is on - see ISignIn. *@
+@if (SignIn.Enabled)
+{
+    if (SignIn.UserName is { } name)
+    {
+        <FluentLabel Typo="Typography.Body">@name</FluentLabel>
+        <FluentButton Appearance="Appearance.Stealth" OnClick="SignIn.SignOutAsync">Sign out</FluentButton>
+    }
+    else
+    {
+        <FluentButton Appearance="Appearance.Outline" OnClick="SignIn.SignInAsync">Sign in</FluentButton>
+    }
+}
+
+@code {
+    protected override void OnInitialized() => SignIn.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => SignIn.Changed -= OnChanged;
+}

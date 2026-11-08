@@ -12,7 +12,7 @@ output "acr_name" {
 }
 
 output "key_vault_name" {
-  value = azurerm_key_vault.main.name
+  value = local.key_vault_output_name
 }
 
 output "api_url" {
@@ -20,7 +20,7 @@ output "api_url" {
 }
 
 output "api_docs_url" {
-  description = "Swagger UI. Unlike /health it is not gated on Development, so it works here."
+  description = "Swagger UI. Not gated on Development, so it works here."
   value       = "https://${azurerm_container_app.api.ingress[0].fqdn}/api-docs"
 }
 
@@ -30,7 +30,7 @@ output "appdb_connection_secret_name" {
 }
 
 output "container_app_environment_default_domain" {
-  value = azurerm_container_app_environment.main.default_domain
+  value = local.container_app_environment_domain
 }
 
 output "database_provider" {
@@ -41,6 +41,26 @@ output "database_provider" {
 output "database_server_name" {
   description = "Null on the SQLite branch."
   value       = module.database.server_name
+}
+
+output "database_server_resource_group" {
+  description = "Where the server lives: the platform's group, on the platform. Null on the SQLite branch."
+  value       = module.database.server_resource_group
+}
+
+output "database_server_fqdn" {
+  description = "Null on the SQLite branch."
+  value       = module.database.server_fqdn
+}
+
+output "database_role" {
+  description = "The login a preview on the platform uses. The workflow creates it (HCP's runners cannot reach the server). Null with a server of its own."
+  value       = module.database.role_name
+}
+
+output "database_names" {
+  description = "The preview's databases, space separated, for the workflow to hand to database_role. Null with a server of its own."
+  value       = module.database.database_names
 }
 
 output "database_storage_account_name" {

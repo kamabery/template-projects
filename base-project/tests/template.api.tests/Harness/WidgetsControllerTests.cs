@@ -19,8 +19,8 @@ namespace template.api.tests.Harness;
 /// <c>InternalsVisibleTo</c> item in template.api's csproj, because top-level statements compile to
 /// an internal <c>Program</c> class.</para>
 /// <para><see cref="WebApplicationFactory{TEntryPoint}"/> hosts the app in the Development
-/// environment, which is what makes <c>/health</c> and the <c>/harness/*</c> endpoints reachable
-/// here - both are Development-gated. <c>/openapi</c> and <c>/api-docs</c> are not, and
+/// environment, which is what makes the <c>/harness/*</c> endpoints reachable here - they are
+/// Development-gated. <c>/health</c>, <c>/openapi</c> and <c>/api-docs</c> are not, and
 /// <see cref="OpenApiAndSwaggerUi_AreServedOutsideDevelopment"/> re-hosts in Production to prove
 /// it.</para>
 /// </remarks>
@@ -197,7 +197,7 @@ public sealed class WidgetsControllerTests : IAsyncLifetime
     public async Task OpenApiAndSwaggerUi_AreServedOutsideDevelopment()
     {
         // Everything else in this class runs in Development, which WebApplicationFactory picks by
-        // default. These two are deliberately ungated, unlike /health and /harness/*, so assert
+        // default. These two are deliberately ungated, unlike /harness/*, so assert
         // that somewhere the gate would otherwise have closed.
         await using var production = _factory.WithWebHostBuilder(
             builder => builder.UseEnvironment("Production"));
@@ -209,6 +209,35 @@ public sealed class WidgetsControllerTests : IAsyncLifetime
 
         document.StatusCode.ShouldBe(HttpStatusCode.OK);
         ui.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Health_IsServedOutsideDevelopment()
+    {
+        // The factory's preview smoke check probes /health (through the front end's /api) on a container
+        // running as Production.
+        await using var production = _factory.WithWebHostBuilder(
+            builder => builder.UseEnvironment("Production"));
+
+        using var client = production.CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).ShouldBe("Healthy");
+    }
+
+    [Theory]
+    [InlineData("/api/Widgets")]
+    [InlineData("/api/health")]
+    [InlineData("/Widgets")]
+    public async Task Routes_AreServedWithAndWithoutTheApiPrefix(string path)
+    {
+        // React's Static Web App links this API as its backend and forwards /api/* unchanged, where
+        // Vite's proxy and Aspire's YARP strip the prefix (canary-8: every deployed call was a 404).
+        var response = await _client.GetAsync(path);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     private async Task<IReadOnlyList<Widget>> GetWidgetsAsync()

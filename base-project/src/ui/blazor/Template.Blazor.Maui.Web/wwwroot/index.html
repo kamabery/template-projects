@@ -43,6 +43,9 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
+    <!-- The OIDC redirects behind Pages/Authentication.razor. Loaded always and inert until
+         Program.cs registers sign-in, which it does only when the API asks for it. -->
+    <script src="_content/Microsoft.AspNetCore.Components.WebAssembly.Authentication/AuthenticationService.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
 
     <!-- Always this filename: the ServiceWorker item in the .csproj swaps the published

@@ -4,14 +4,20 @@ namespace AspireStarter.Cli.Tests;
 // the pack actually ships drifted.
 internal static class RepoPaths
 {
-    public static string Wiring(string fileName)
+    public static string Wiring(string fileName) => Find(Path.Combine("templating", "wiring", fileName));
+
+    public static string IaC(string fileName) => Find(Path.Combine("IaC", fileName));
+
+    public static string File(string rel) => Find(rel);
+
+    private static string Find(string rel)
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "templating", "wiring", fileName);
-            if (File.Exists(candidate)) return candidate;
+            var candidate = Path.Combine(dir.FullName, rel);
+            if (System.IO.File.Exists(candidate)) return candidate;
         }
 
-        throw new FileNotFoundException($"templating/wiring/{fileName} not found above {AppContext.BaseDirectory}");
+        throw new FileNotFoundException($"{rel.Replace('\\', '/')} not found above {AppContext.BaseDirectory}");
     }
 }

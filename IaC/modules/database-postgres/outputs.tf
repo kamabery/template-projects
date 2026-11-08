@@ -34,7 +34,25 @@ output "single_writer" {
 
 output "server_name" {
   description = "The database server. Null on the SQLite branch, which has no server - the deploy pipeline branches on provider_name."
-  value       = azurerm_postgresql_flexible_server.main.name
+  value       = local.server_name
+}
+
+output "server_resource_group" {
+  value = local.shared ? var.platform.postgres_resource_group : var.resource_group_name
+}
+
+output "server_fqdn" {
+  value = local.server_fqdn
+}
+
+output "role_name" {
+  description = "The login a preview on the shared server uses, which deploy.yml creates. Null with a server of its own."
+  value       = local.role_name
+}
+
+output "database_names" {
+  description = "What role_name owns, space separated. Null with a server of its own."
+  value       = local.shared ? join(" ", concat([azurerm_postgresql_flexible_server_database.appdb.name], var.include_events ? [azurerm_postgresql_flexible_server_database.eventstore[0].name] : [])) : null
 }
 
 output "storage_account_name" {

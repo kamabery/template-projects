@@ -4,7 +4,7 @@ variable "project_name" {
 }
 
 variable "environment" {
-  description = "Environment discriminator - dev, test, prod. Part of every resource name, so keep it short."
+  description = "Environment discriminator - dev, staging, or j<NNN> for one factory job's ephemeral preview. Part of every resource name, so keep it short."
   type        = string
   default     = "dev"
 
@@ -54,6 +54,36 @@ variable "cors_allowed_origins" {
   description = "Origins written into the API's Cors:AllowedOrigins. Needed only by the Blazor WebAssembly front end, which is genuinely cross-origin; the React front end reaches the API same-origin through the Static Web App's linked backend and needs no entry here. Populated on a second apply - see frontend.blazor-web.tf."
   type        = list(string)
   default     = []
+}
+
+variable "deployer_object_id" {
+  description = "Object id of the identity the deploy workflow signs in to Azure as (the factory's GitHub Actions app). It gets Key Vault Secrets User on this environment's vault, so the schema step can read the connection string. Set on the HCP variable set by setup-azure.ps1; null for a developer's own apply."
+  type        = string
+  default     = null
+}
+
+variable "platform" {
+  description = "The factory's shared platform, which j<NNN> previews run on (see local.on_platform). Set on the HCP variable set by the factory's setup-platform.ps1; null means every environment has a stack of its own."
+  type = object({
+    location                   = string
+    environment_id             = string
+    environment_name           = string
+    environment_domain         = string
+    log_analytics_workspace_id = string
+    key_vault_id               = string
+    key_vault_name             = string
+    postgres_server_id         = string
+    postgres_server_name       = string
+    postgres_server_fqdn       = string
+    postgres_resource_group    = string
+  })
+  default = null
+}
+
+variable "use_platform" {
+  description = "False builds the whole stack for a preview too, which is what the factory's full canary does to prove a from-scratch create."
+  type        = bool
+  default     = true
 }
 
 variable "db_allowed_ip_ranges" {

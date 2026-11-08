@@ -35,19 +35,29 @@ resource group
 | **Front end to API** | A scaffold has one front end. React's Static Web App **links** the API container app as a backend, so the browser calls a same-origin `/api` — the same shape Vite's proxy gives in development. Blazor WebAssembly instead calls the API's own address cross-origin, which is also what it does in development, and is why it is the one client that needs CORS. Each deployed front end therefore reaches the API the same way it does locally. |
 | **Network** | Public endpoints with firewall rules. No VNet, no private endpoints, no private DNS. Cheap, fast to apply, and reachable from a laptop — which is what a scaffold should be. Moving to private networking is a real change, not a flag. |
 | **Identity** | One user-assigned managed identity, granted `AcrPull`, `Key Vault Secrets User`, `Azure Service Bus Data Owner` and, on the Functions storage account, `Storage Blob Data Owner`. Database credentials are generated here, stored in Key Vault, and referenced by the container apps by URI. No credential is an app setting. |
-| **State** | Local by default so `terraform init` works immediately. `bootstrap/` creates the remote state account when a second person needs it; `backend.tf` is four lines of uncommenting away. |
-| **Environments** | `envs/*.tfvars`, not workspaces. |
+| **State** | HCP Terraform. `backend.tf` is an empty `cloud {}` block; the organization, project and workspace come from `TF_CLOUD_ORGANIZATION`, `TF_CLOUD_PROJECT` and `TF_WORKSPACE`, so nothing about who runs it is baked into a scaffold. Runs execute in HCP with dynamic Azure credentials. A gitignored `backend_override.tf` with `backend "local" {}` gives local state for experiments. |
+| **Environments** | `envs/dev.tfvars` and `envs/staging.tfvars`, plus `envs/ephemeral.tfvars` for a factory job's preview (`environment = j<NNN>`, scale to zero, tagged `ephemeral`). One HCP workspace per environment, `<repository>-<environment>`. **No production**: `guards.tf` refuses `prod`, and nothing here deploys one. `RESOURCE-MAP.md` lists the Azure twin of every local resource; `aspire-addon infra check` enforces it and `infra adopt` brings an older scaffold's pack-owned infra files forward. |
+| **Deploying** | `.github/workflows/deploy.yml`, dispatch only. Merging to `main` deploys nothing; dev and staging are ready and wait for a person to run them. |
 | **Messaging** | Deployed, the events service publishes `WidgetCompletedV1` to Service Bus on every event store (`events_transport` defaults to `azureservicebus`), through its own outbox. The **only** consumer is an Azure Function on **Flex Consumption**: target-based scaling divides the queue length by `maxConcurrentCalls` in the project's `host.json`, up to `functions_max_instances`, and scales to zero when the queue is empty. The events service keeps `min_replicas = 1` for its projection daemon; the consumer does not inherit that. It reaches its storage and the namespace with the same managed identity, so there is no connection string anywhere. |
 
 ## Apply it
 
+Normally the deploy workflow does this. By hand:
+
 ```bash
-az login
-az account set --subscription <id>
+az login                                   # for the image build and schema steps below
+terraform login                            # HCP Terraform
+
+export TF_CLOUD_ORGANIZATION=<org>
+export TF_CLOUD_PROJECT=<repository>
+export TF_WORKSPACE=<repository>-dev
 
 terraform init
 terraform apply -var-file=envs/dev.tfvars
 ```
+
+`terraform test -var-file=envs/ephemeral.tfvars` (after `terraform init -backend=false`) checks
+the ephemeral contract offline, with every provider mocked.
 
 The first apply runs a public placeholder image, because nothing has been pushed to the registry
 yet. Then build and push, and apply again with a tag:
@@ -85,12 +95,53 @@ npm --prefix src/ui/react run build
 swa deploy src/ui/react/dist --deployment-token "$(terraform output -raw react_api_key)" --env production
 ```
 
+## On the platform
+
+A `j<NNN>` preview runs on the factory's shared platform when the HCP variable set carries `platform`
+(the factory's `setup-platform.ps1` puts it there) and the preview is in the platform's region. It then
+creates no Container Apps environment, Log Analytics workspace, Key Vault or database server, which is
+most of what makes a preview slow. dev, staging and `use_platform = false` keep a full stack.
+
+- What must be unique there carries the preview's id: container apps (`ca-<name>-<env>-api`), secrets
+  (`<name>-<env>-appdb-connection`), databases (`<name>_<env>_appdb`) and the SQLite share's environment
+  storage.
+- The app's identity is granted its own secrets, one by one, and never the shared vault.
+- **Its Postgres login is not in Terraform.** HCP's runners sit outside Azure and the firewall keeps them
+  out, so `deploy.yml` creates `preview_<name>_<env>` from the GitHub runner, which it has just let in.
+  The password comes from the connection string Terraform wrote. It gets each database and an explicit
+  grant on its `public` schema, which on Azure belongs to `azure_pg_admin`, not the database's owner. A destroy runs in HCP and cannot drop the
+  role, so each deploy drops the `preview_*` roles that own no database.
+
 ## Things that will bite you
 
-- **Do not point a container app probe at `/health`.** `MapDefaultEndpoints()` maps `/health` and
-  `/alive` in Development only, and these containers run as Production. The probes here use
-  `/openapi/v1.json`, which `Program.cs` maps unconditionally. A `/health` probe fails every
-  revision and the dashboard blames the image.
+- **The linked backend keeps the `/api` prefix; Vite's proxy and Aspire's YARP strip it.** The
+  Static Web App forwards `/api/Widgets` to the container app as `/api/Widgets`, so `Program.cs`
+  calls `app.UsePathBase("/api")` (then `app.UseRouting()`) to serve every route both ways. Linking
+  also puts the API behind the Static Web App's auth: its own `api_url` answers 401 (or 400) to
+  everyone else, so smoke-test it through `<react_url>/api/...`. A Blazor scaffold's API has no
+  linked backend and stays directly reachable.
+- **Azure adds to the resource group behind Terraform's back.** Minutes after Application Insights
+  is created, Azure gives it a `Failure Anomalies` smart-detector alert rule that is not in the
+  state, and azurerm refuses to delete a resource group that still holds anything. `providers.tf`
+  lets a `j<NNN>` preview's destroy take it; dev and staging keep the refusal, so destroying one of
+  those means deleting that rule first.
+- **Do not point a container app probe at `/health`.** `MapDefaultEndpoints()` maps `/health` in
+  every environment (the factory's smoke check reads it) but `/alive` in Development only, and
+  `/health` includes the database check, so a probe on it restarts a healthy container whenever the
+  database blips. The probes here use `/openapi/v1.json`, which `Program.cs` maps unconditionally.
+  Scaffolds older than 2026-10-24 map `/health` in Development only, where a `/health` probe fails
+  every revision and the dashboard blames the image.
+- **With more than one dynamic-credential configuration, HCP stops configuring the providers.** The
+  factory's variable set carries a tagged `EXTERNAL` configuration for the auth add-on, and that
+  puts every project in HCP's multiple-configuration mode, with or without the add-on. Each provider
+  must then say `use_oidc` and read its token and client id from `var.tfc_azure_dynamic_credentials`,
+  as `providers.tf` does for `azurerm` and `azapi`. Leave that out and azurerm falls back to the
+  Azure CLI, which HCP's runners do not have: `exec: "az": executable file not found in $PATH`.
+  Offline `terraform test` cannot catch this; only a real HCP run can.
+- **New GitHub repos present an immutable OIDC subject.** `azure/login` sends
+  `repo:<owner>@<id>/<name>@<id>:environment:preview`, not `repo:<owner>/<name>:...`, and a
+  federated credential for the plain form fails with `AADSTS700213`. Read the repo's format from
+  `GET /repos/<o>/<n>/actions/oidc/customization/sub` (`sub_claim_prefix`) before registering one.
 - **The Blazor WebAssembly front end needs a second apply.** `containerapp.api.tf` is part of the
   base scaffold and cannot reference a resource declared in an add-on file, so the Static Web App's
   hostname reaches `Cors:AllowedOrigins` only after it exists. Apply, copy `blazor_web_url` into

@@ -16,11 +16,12 @@ has not given.
 
 ## Phase 1 — Interview
 
-Ask all four decisions in **one** `AskUserQuestion` call. Also settle the project name and output
+Ask all five decisions in **one** `AskUserQuestion` call. Also settle the project name and output
 directory; if the user already gave a name, do not ask for it again.
 
 **Answers supplied.** A caller that runs without a user (the claude-factory's bootstrap job) gives
-all six answers up front: name, output directory, resource, data store, events and front end. Then
+all seven answers up front: name, output directory, resource, data store, events, front end and
+sign-in. Then
 do not interview, and do not run Phase 2: check that `dotnet new list aspire-base` lists the template
 and that `aspire-addon` is on `PATH`, and if either is missing stop and say so rather than building
 or installing anything. Such a caller may also say to skip Phase 5; list graphify as a follow-up in
@@ -32,6 +33,7 @@ the report. Everything else, from Phase 3 on, is unchanged.
 | What is the data store? | `Data store` | **PostgreSQL** (default; container, needs Docker) / **SQL Server Express** (container, needs Docker) / **SQLite** (a local file, no Docker at all) |
 | Does it need events? | `Events` | **No** (default) / **Yes — Wolverine event sourcing**, on the event store that matches the data store above: Marten on PostgreSQL (its own extra container), Polecat on SQL Server (a second database on the same container), Fisher on SQLite (a local file, still no Docker) |
 | What is the front end? | `Front end` | **React** (Vite + TanStack + Tailwind, installable as a PWA) / **Blazor** (WebAssembly, FluentUI, MVVM) / **Blazor + mobile hybrid**, which adds the MAUI Blazor Hybrid host beside the web one / **Neither — API only** |
+| Does it need sign-in? | `Sign-in` | **No** (default) / **Yes** — Keycloak under the AppHost (a container; user `qa` / `qa`), Entra External ID in Azure. Needs a web front end: offer it only when the front end is React or Blazor, never for API only or mobile only. Reads stay anonymous; writes need a signed-in user |
 
 **A scaffold gets one front end at creation.** Mobile is folded into that question rather than asked
 separately because the MAUI host renders the same Razor Class Library the Blazor web host does — it
@@ -77,6 +79,7 @@ Let `<Name>` be the project name and `<Dir>` the output directory.
 | front end is React | `aspire-addon add ui-react` | `<Dir>` |
 | front end is Blazor | `aspire-addon add ui-blazor --web true --maui <false\|true>` | `<Dir>` |
 | events is yes | `aspire-addon add events` | `<Dir>` |
+| sign-in is yes | `aspire-addon add auth` — after the front end, which it reads from the manifest | `<Dir>` |
 
 The add-ons go through the `aspire-addon` CLI, not `dotnet new` directly. `aspire-base` writes
 `.aspirestarter.json` recording `-n`, `--resource` and `--dbProvider`, and the CLI passes those to
@@ -144,6 +147,7 @@ the marker line, never replacing it:
 | `<<addon-src-projects>>` | `<Name>.slnx` | **above** — `<Project>` entries under `/src/` |
 | `<<addon-ui-projects>>` | `<Name>.slnx` | **above** — `<Project>` entries under `/src/ui/blazor/` |
 | `<<addon-test-projects>>` | `<Name>.slnx` | **above** — `<Project>` entries under `/tests/` |
+| `<<addon-api-env>>` | `IaC/containerapp.api.tf` | **below** — API environment variables (the auth add-on's `Auth__*`) |
 
 Order matters in `apphost.cs`: the React resource declares `var ui`, and the publish block uses it.
 
@@ -313,7 +317,10 @@ dotnet test tests/<name>.api.tests
 # plus each other test project that exists
 dotnet build .aspire/apphost.cs      # proves the AppHost wiring compiles
 
+aspire-addon infra check             # every local resource has its Azure twin; HCP state; no prod, no VMs
+
 cd IaC && terraform init -backend=false && terraform validate && terraform fmt -check -recursive
+terraform test -var-file=envs/ephemeral.tfvars   # offline, every provider mocked
 ```
 
 The Terraform check needs Terraform 1.9 or newer on `PATH`. If it is not installed, say so in the

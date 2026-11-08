@@ -5,6 +5,8 @@
 # environment forwards them.
 
 resource "azurerm_log_analytics_workspace" "main" {
+  count = local.on_platform ? 0 : 1
+
   name                = "log-${local.base_name}-${var.environment}"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
@@ -17,7 +19,7 @@ resource "azurerm_application_insights" "main" {
   name                = "appi-${local.base_name}-${var.environment}"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  workspace_id        = azurerm_log_analytics_workspace.main.id
+  workspace_id        = local.log_analytics_workspace_id
   application_type    = "web"
   tags                = local.tags
 }

@@ -1,27 +1,24 @@
-# State.
+# State lives in HCP Terraform.
 #
-# Local by default, so `terraform init` in a freshly scaffolded project needs nothing at all. That
-# is right for the first ten minutes and wrong the moment a second person applies: local state
-# cannot lock, and two concurrent applies will corrupt it.
+# The block is empty on purpose: nothing about who runs this is written into a scaffold. HCP reads
+# the rest from the environment, which the deploy workflow sets and a developer sets by hand:
 #
-# Before anyone else touches this, run the bootstrap module once to create the state account:
+#   TF_CLOUD_ORGANIZATION       the HCP organization
+#   TF_CLOUD_PROJECT            one HCP project per repository, named after it
+#   TF_WORKSPACE                <repository>-<environment>, e.g. shelf-dev, shelf-j012
+#   TF_TOKEN_app_terraform_io   or `terraform login`
 #
-#   cd bootstrap
-#   terraform init && terraform apply
-#   terraform output -raw storage_account_name
+# Runs execute in HCP, which holds the Azure credentials as dynamic provider credentials on the
+# project's variable set. Neither a laptop nor the workflow needs an Azure secret for Terraform.
 #
-# then uncomment the block below, fill in that name, and run:
+# To experiment with local state instead, create backend_override.tf (gitignored) containing
 #
-#   terraform init -migrate-state
-#
-# Keep terraform.tfstate out of git either way - .gitignore already does.
-
-# terraform {
-#   backend "azurerm" {
-#     resource_group_name  = "rg-tfstate"
-#     storage_account_name = "REPLACE_ME"
-#     container_name       = "tfstate"
-#     key                  = "dev.tfstate"
-#     use_azuread_auth     = true
+#   terraform {
+#     backend "local" {}
 #   }
-# }
+#
+# and run `terraform init`. Override files replace this block entirely.
+
+terraform {
+  cloud {}
+}

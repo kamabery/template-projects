@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,6 +22,14 @@ internal static class Text
     }
 
     public static List<string> Lines(string text) => [.. text.Split('\n')];
+
+    /// <summary>
+    /// Whether two files are the same apart from CRLF against LF: a scaffold checked out with
+    /// core.autocrlf holds CRLF copies of what the pack ships as LF. Latin1 maps every byte to one
+    /// char, so this is a byte comparison and is safe on a binary file.
+    /// </summary>
+    public static bool SameIgnoringLineEndings(byte[] a, byte[] b) =>
+        Encoding.Latin1.GetString(a).Replace("\r\n", "\n") == Encoding.Latin1.GetString(b).Replace("\r\n", "\n");
 
     /// <summary>
     /// The block's first line that is code rather than commentary. A block is taken as already

@@ -1,6 +1,6 @@
 resource "azurerm_container_app" "api" {
   name                         = local.api_app_name
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = local.container_app_environment_id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
   tags                         = local.tags
@@ -97,6 +97,8 @@ resource "azurerm_container_app" "api" {
           value = env.value
         }
       }
+
+      # <<addon-api-env>> - scaffolding inserts add-on environment variables below this line.
 
       dynamic "volume_mounts" {
         for_each = module.database.volume_mounts

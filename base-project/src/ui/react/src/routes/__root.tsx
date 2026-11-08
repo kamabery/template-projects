@@ -4,6 +4,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import type { QueryClient } from '@tanstack/react-query'
 import type { Theme } from '@/store/preferences'
 import { setTheme, useTheme } from '@/store/preferences'
+import { signIn, signOut, useAuth } from '@/lib/auth'
+import { Button } from '@/components/ui/button'
 import { NavBar, NavItem } from '@/components/ui/nav'
 import { ToastProvider } from '@/components/ui/toast'
 
@@ -60,13 +62,39 @@ function ThemeToggle() {
   )
 }
 
+/** Nothing at all unless the API says writes need a signed-in user. */
+function AuthControl() {
+  const { enabled, user, error } = useAuth()
+  if (!enabled) return null
+
+  return user ? (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-content-muted">{user}</span>
+      <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+        Sign out
+      </Button>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2">
+      {error && (
+        <span role="alert" className="text-xs text-intent-danger">
+          Sign-in did not complete: {error}
+        </span>
+      )}
+      <Button variant="secondary" size="sm" onClick={() => void signIn()}>
+        Sign in
+      </Button>
+    </div>
+  )
+}
+
 function RootLayout() {
   return (
     <ToastProvider>
       <div className="min-h-dvh">
         <header className="border-b border-border-subtle bg-surface-raised">
           <div className="mx-auto flex max-w-4xl items-center gap-1 px-6 py-3">
-            <span className="mr-4 font-semibold">template.ui</span>
+            <span className="mr-4 font-semibold">AspireStarterAppName</span>
 
             <NavBar>
               <NavItem to="/" exact>
@@ -76,7 +104,8 @@ function RootLayout() {
               <NavItem to="/styleguide">Style guide</NavItem>
             </NavBar>
 
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3">
+              <AuthControl />
               <ThemeToggle />
             </div>
           </div>

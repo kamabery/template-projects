@@ -50,7 +50,7 @@ function WidgetsPage() {
 
         <div className="flex items-center gap-2">
           <div
-            className="flex gap-1 rounded-lg border border-border-subtle p-1"
+            className="flex gap-1 rounded-control border border-border-subtle p-1"
             role="group"
             aria-label="Density"
           >

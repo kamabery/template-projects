@@ -235,7 +235,7 @@ is an embedded resource on a relative path, so the page is **fully self-containe
 offline** — no CDN, no webfonts. `SwaggerUi_IsServedAtApiDocs` asserts that last point directly, by
 failing if any absolute URL appears in the page.
 
-Unlike `/health` and `/harness/*`, neither `/openapi/v1.json` nor `/api-docs` is gated on Development.
+Unlike `/harness/*`, neither `/openapi/v1.json` nor `/api-docs` is gated on Development.
 One consequence worth knowing before shipping a scaffold: **the document advertises `/harness/*`**,
 which returns 404 outside Development — and those endpoints are now one click from executing rather
 than a `curl` command away. Gate the UI behind `app.Environment.IsDevelopment()` if that matters —
@@ -521,9 +521,9 @@ stack onto the same options object and EF would refuse two providers), and the r
 it is the test that would fail if the controller ever went back to generating rows in process.
 
 The factory hosts the app in the Development environment — that is what makes
-`/health` and the `/harness/*` endpoints reachable from there, since both are Development-gated.
-`/openapi` and `/api-docs` are not, and `OpenApiAndSwaggerUi_AreServedOutsideDevelopment` re-hosts the
-same factory in Production to prove it. Reaching `Program` relies on the `InternalsVisibleTo` item in `template.api.csproj`,
+the `/harness/*` endpoints reachable from there, since they are Development-gated.
+`/health`, `/openapi` and `/api-docs` are not, and `Health_IsServedOutsideDevelopment` and
+`OpenApiAndSwaggerUi_AreServedOutsideDevelopment` re-host the same factory in Production to prove it. Reaching `Program` relies on the `InternalsVisibleTo` item in `template.api.csproj`,
 because top-level statements compile to an internal `Program` class.
 
 Three pins in `Directory.Packages.props` are load-bearing rather than lazy, and are commented there:

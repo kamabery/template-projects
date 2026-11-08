@@ -8,11 +8,7 @@
     {
       "name": "aspire-starter",
       "source": "./",
-      "description": "boot-strap-app creates a new AspireStarter solution; enhance-app adds events, React or Blazor to an existing one through the aspire-addon CLI.",
-      "skills": [
-        "./.claude/skills/boot-strap-app",
-        "./.claude/skills/enhance-app"
-      ]
+      "description": "boot-strap-app creates a new AspireStarter solution; enhance-app adds events, React or Blazor to an existing one through the aspire-addon CLI."
     }
   ]
 }

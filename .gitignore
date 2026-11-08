@@ -497,3 +497,6 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# tooling/verify: logs from live runs, which are not committed. The reports/<sha>.md beside them are.
+tooling/verify/reports/*/

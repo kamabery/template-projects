@@ -1,0 +1,10 @@
+@page "/authentication/{action}"
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+@* The OIDC redirect endpoints: login, login-callback, logout, logout-callback. In this host and not
+   the shared library, because the package behind it is WebAssembly-only. *@
+<RemoteAuthenticatorView Action="@Action" />
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}

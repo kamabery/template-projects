@@ -24,6 +24,7 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
         ["events"] = "aspire-events",
         ["ui-react"] = "aspire-ui-react",
         ["ui-blazor"] = "aspire-ui-blazor",
+        ["auth"] = "aspire-auth",
     };
 
     // The event store follows the data store; it is never a separate choice.
@@ -86,6 +87,15 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
             (entry.Web, entry.Maui) = (options.Web, options.Maui);
             args.AddRange(["--web", Flag(options.Web), "--maui", Flag(options.Maui)]);
         }
+        else if (options.AddOn == "auth")
+        {
+            // Entra External ID redirects a browser back to the front end, so the template ships the
+            // redirect URIs of the one this scaffold has. The MAUI host is not a web front end.
+            var frontend = manifest.AddOns.Any(a => a.Id == "ui-react") ? "react"
+                : manifest.AddOns.Any(a => a.Id == "ui-blazor" && a.Web == true) ? "blazor-web"
+                : throw new CliException("auth needs a web front end - ui-react, or ui-blazor with --web true - for Entra External ID to redirect back to.");
+            args.AddRange(["--frontend", frontend]);
+        }
 
         var temp = Directory.CreateTempSubdirectory("aspire-addon-").FullName;
         try
@@ -101,8 +111,8 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
 
     private AddReport Apply(string root, string temp, Manifest manifest, AddOnEntry entry, AddOptions options)
     {
-        // 1. Files. One that already exists byte-identical is skipped - both UI templates ship the
-        //    same docs/DESIGN.md - and one that exists with different content stops the run.
+        // 1. Files. One that already exists identical, line endings aside, is skipped - both UI
+        //    templates ship the same docs/DESIGN.md - and one with different content stops the run.
         var added = new List<string>();
         var identical = new List<string>();
         var conflicts = new List<string>();
@@ -113,7 +123,7 @@ internal sealed class AddCommand(ITemplateRunner runner, TextWriter output)
 
             var target = Path.Combine(root, rel);
             if (!File.Exists(target)) added.Add(rel);
-            else if (File.ReadAllBytes(target).AsSpan().SequenceEqual(File.ReadAllBytes(path))) identical.Add(rel);
+            else if (Text.SameIgnoringLineEndings(File.ReadAllBytes(target), File.ReadAllBytes(path))) identical.Add(rel);
             else conflicts.Add(rel);
         }
         if (conflicts.Count > 0)

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using template.api.Services;
 
@@ -10,8 +11,14 @@ namespace template.api.Controllers;
 /// Every action returns 404 outside Development. Gating here rather than by conditionally
 /// registering the controller keeps <c>AddControllers</c>/<c>MapControllers</c> a single
 /// unconditional pair, which is the whole registration story for this API.
+/// <para>
+/// <c>[AllowAnonymous]</c> because these are writes, and AuthConfigurator puts every write behind
+/// sign-in once an authority is configured. The harness exists to be driven from the UI in
+/// Development; making it sign in first would only get in the way.
+/// </para>
 /// </remarks>
 [ApiController]
+[AllowAnonymous]
 [Route("harness")]
 public sealed class HarnessController(HarnessFaultInjector faults, IHostEnvironment environment) : ControllerBase
 {

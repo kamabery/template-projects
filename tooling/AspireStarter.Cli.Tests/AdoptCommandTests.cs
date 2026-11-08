@@ -83,6 +83,17 @@ public sealed class AdoptCommandTests : IDisposable
     }
 
     [Fact]
+    public void AKeycloakRealm_RecordsTheAuthAddOn()
+    {
+        PreManifestScaffold();
+        Write(".aspire/keycloak/app-realm.json", "{}");
+
+        Adopt(name: "Shop").ShouldBe(0, _output.ToString());
+
+        File.ReadAllText(Path.Combine(_root, ".aspirestarter.json")).ShouldContain("\"auth\"", Case.Sensitive);
+    }
+
+    [Fact]
     public void AnExistingManifest_IsLeftAlone()
     {
         PreManifestScaffold();

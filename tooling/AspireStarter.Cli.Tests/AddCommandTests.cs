@@ -205,6 +205,44 @@ public sealed class AddCommandTests : IDisposable
         Read("src/template.api/appsettings.json").ShouldBe(api);
     }
 
+    // A CRLF checkout of the file on one side and the pack's LF on the other, or the reverse.
+    [Theory]
+    [InlineData("the design rules\r\n", "the design rules\n")]
+    [InlineData("the design rules\n", "the design rules\r\n")]
+    public void ASharedFileDifferingOnlyInLineEndings_IsNotAConflict(string inScaffold, string inPack)
+    {
+        Scaffold();
+        Write("docs/DESIGN.md", inScaffold);
+
+        Add(ReactTemplate(design: inPack), "ui-react").ShouldBe(0, _output.ToString());
+
+        Read("docs/DESIGN.md").ShouldBe(inScaffold);
+    }
+
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    public void TheManifest_KeepsTheLineEndingsItCameWith(string eol)
+    {
+        Scaffold();
+        Write(".aspirestarter.json", Read(".aspirestarter.json").ReplaceLineEndings(eol) + eol);
+
+        Add(ReactTemplate(), "ui-react").ShouldBe(0, _output.ToString());
+
+        var manifest = Read(".aspirestarter.json");
+        manifest.ShouldContain("\"ui-react\"", Case.Sensitive);
+        manifest.ShouldBe(manifest.ReplaceLineEndings(eol));
+    }
+
+    [Fact]
+    public void ANewManifest_IsUniformlyLf()
+    {
+        ManifestStore.Save(_root, new Manifest { Name = "Shop", Resource = "Product", DbProvider = "postgres", PackVersion = "1.0.0" });
+
+        var manifest = Read(".aspirestarter.json");
+        manifest.ShouldBe(manifest.ReplaceLineEndings("\n"));
+    }
+
     [Fact]
     public void NoManifest_IsRefusedWithTheAdoptHint()
     {
