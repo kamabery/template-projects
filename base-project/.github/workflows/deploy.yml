@@ -139,10 +139,12 @@ jobs:
       # -var flags, only the configuration the last apply uploaded. This file goes up with every
       # apply below, so those runs see this environment's variables too; without it a destroy fails
       # on "project_name is not set" and the preview is never torn down. Gitignored, never committed.
+      # dev.tfvars and staging.tfvars set environment themselves, and Terraform refuses a variable
+      # set twice in one file, so that line is dropped before the real one is appended.
       - name: record this environment's variables for API-queued runs
         working-directory: IaC
         run: |
-          { cat "envs/${TF_VARS}.tfvars"; echo; echo "environment = \"${TF_ENV}\""; } > zz-env.auto.tfvars
+          { grep -vE '^[[:space:]]*environment[[:space:]]*=' "envs/${TF_VARS}.tfvars"; echo; echo "environment = \"${TF_ENV}\""; } > zz-env.auto.tfvars
 
       # The registry and the database first, on their own. The images cannot be built before the
       # registry exists and the schema cannot be applied before the database does - but the
