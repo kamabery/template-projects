@@ -105,9 +105,10 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      # Retried when the provider registry times out; a config error still fails at once.
       - name: terraform init
         working-directory: IaC
-        run: terraform init
+        run: bash ../.github/scripts/terraform-init.sh
 
       # The front-end-only path. Each step it skips is guarded on FRONT_END_ONLY != 'true', so if this
       # step never set it the full path runs. The publish steps read their tokens from terraform
