@@ -8,7 +8,9 @@
 #   pwsh tooling/verify/live.ps1 -Mode Cleanup            removes everything named verify-* and ver*-j90*
 #
 # Only a run of every check, in one go, at one commit, with nothing else on the platform, is a clean pass.
-# Needs VERIFY_HCP_TOKEN, and gh, az, docker, node and terraform signed in where they need to be.
+# Needs, as user environment variables, VERIFY_HCP_TOKEN, VERIFY_HCP_VARSET (the platform's variable set id),
+# VERIFY_EXTERNAL_TENANT_ID and VERIFY_EXTERNAL_SUBDOMAIN (the Entra External tenant previews sign in to); and
+# gh, az, docker, node and terraform signed in where they need to be.
 #
 # Postgres, as approved: admin sessions are read-only, the password stays in memory and out of logs, and
 # firewall rules are named verify-* and removed even when a step fails.
@@ -29,10 +31,11 @@ $StatePath = Join-Path $Work 'state.json'
 
 $Owner = 'kamabery'
 $Org = 'kurt-mabery'
-$ExternalTenant = 'b9423072-52e3-464e-bacf-fc71b75defbc'
-$ExternalSubdomain = 'kamfactorypv'
+# The platform's ids are user environment variables, not in this public repo (history review, 2026-11-15).
+$ExternalTenant = [Environment]::GetEnvironmentVariable('VERIFY_EXTERNAL_TENANT_ID', 'User')
+$ExternalSubdomain = [Environment]::GetEnvironmentVariable('VERIFY_EXTERNAL_SUBDOMAIN', 'User')
 $UserFlowName = 'preview-signin'
-$Varset = 'varset-hencmcQWrTRHqzAv'
+$Varset = [Environment]::GetEnvironmentVariable('VERIFY_HCP_VARSET', 'User')
 $GitHubAppName = 'factory-github-actions'
 $HcpToken = [Environment]::GetEnvironmentVariable('VERIFY_HCP_TOKEN', 'User')
 
@@ -828,7 +831,9 @@ function Invoke-Preflight {
     $note = { param($ok, $text) if ($ok) { Write-Host "ok    $text" } else { Write-Host "STOP  $text"; $problems.Add($text) } }
 
     & $note (-not (Exec git @('-C', $Repo, 'status', '--porcelain'))) 'the repo has no uncommitted changes'
-    & $note ([bool]$HcpToken) 'VERIFY_HCP_TOKEN is set'
+    foreach ($v in @{ VERIFY_HCP_TOKEN = $HcpToken; VERIFY_HCP_VARSET = $Varset; VERIFY_EXTERNAL_TENANT_ID = $ExternalTenant; VERIFY_EXTERNAL_SUBDOMAIN = $ExternalSubdomain }.GetEnumerator() | Sort-Object Key) {
+        & $note ([bool]$v.Value) "$($v.Key) is set (a user environment variable)"
+    }
     foreach ($tool in 'gh', 'az', 'docker', 'node', 'terraform') { & $note ([bool](Get-Command $tool -ErrorAction SilentlyContinue)) "$tool is installed" }
     & $note (Test-Path (Join-Path $PSScriptRoot 'node_modules\playwright')) 'npm ci has been run in tooling/verify'
     & $note ([bool](docker version --format '{{.Server.Version}}' 2>$null)) 'Docker is running'
