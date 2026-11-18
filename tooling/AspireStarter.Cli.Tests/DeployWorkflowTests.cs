@@ -37,9 +37,43 @@ public sealed class DeployWorkflowTests
         next.ShouldStartWith("if: env.FRONT_END_ONLY != 'true'");
     }
 
+    // 2026-11-18, two factory canaries in a row: HCP made the state's outputs readable over a minute after
+    // the apply returned, so `terraform output` gave up ("current outputs were not ready to be read within
+    // the deadline") or, behind `|| true`, read as empty. Every apply waits until its outputs read.
+    [Theory]
+    [InlineData("terraform apply (registry and database)")]
+    [InlineData("terraform apply")]
+    [InlineData("terraform apply (Blazor CORS origin)")]
+    public void EveryApply_WaitsUntilItsOutputsRead(string step)
+    {
+        Step(step).ShouldContain("bash ../.github/scripts/wait-for-outputs.sh");
+    }
+
+    // An `echo "X=$(terraform output -raw x)"` cannot fail the step: echo succeeds whatever the read did,
+    // and the empty value fails three steps later (DB_SERVER_RG, 2026-11-18). One read, and an empty
+    // required output fails here.
+    [Fact]
+    public void ReadOutputs_ReadsOnce_AndFailsOnAnEmptyRequiredOutput()
+    {
+        var step = Step("read outputs");
+        step.ShouldNotContain("terraform output -raw");
+        step.ShouldContain("terraform output -json");
+        step.ShouldContain("for k in acr_name resource_group_name key_vault_name database_provider appdb_connection_secret_name; do");
+    }
+
+    [Fact]
+    public async Task TheOutputsWait_PassesItsOwnCases()
+    {
+        var output = await RunTest("base-project/.github/scripts/wait-for-outputs.test.sh");
+
+        output.ShouldContain("ok   gives up after its deadline", Case.Sensitive, output);
+    }
+
     [Theory]
     [InlineData("base-project/.github/scripts/front-end-only.sh")]
     [InlineData("base-project/.github/scripts/front-end-only.test.sh")]
+    [InlineData("base-project/.github/scripts/wait-for-outputs.sh")]
+    [InlineData("base-project/.github/scripts/wait-for-outputs.test.sh")]
     public void TheDecisionScripts_Ship_WithoutACarriageReturn(string rel)
     {
         File.ReadAllText(RepoPaths.File(rel)).ShouldNotContain("\r");
@@ -81,6 +115,17 @@ public sealed class DeployWorkflowTests
             """.ReplaceLineEndings("\n").Replace("\n", "\n          "));
     }
 
+    // A step's text, from its name to the next step's.
+    private static string Step(string name)
+    {
+        var workflow = Workflow.ReplaceLineEndings("\n");
+        var marker = $"- name: {name}\n";
+        var from = workflow.IndexOf(marker, StringComparison.Ordinal);
+        from.ShouldBeGreaterThan(-1, name);
+        var next = workflow.IndexOf("- name: ", from + marker.Length, StringComparison.Ordinal);
+        return workflow[from..(next < 0 ? workflow.Length : next)];
+    }
+
     private static string LoginStep()
     {
         var workflow = Workflow.ReplaceLineEndings("\n");
@@ -92,13 +137,21 @@ public sealed class DeployWorkflowTests
     [Fact]
     public async Task TheDecisionScript_PassesItsOwnCases()
     {
+        var output = await RunTest("base-project/.github/scripts/front-end-only.test.sh");
+
+        output.ShouldContain("ok   file renamed into src/ui/", Case.Sensitive, output);
+    }
+
+    // Runs a script's own test file under bash; it must exit 0.
+    private static async Task<string> RunTest(string rel)
+    {
         var info = new ProcessStartInfo(Bash())
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        info.ArgumentList.Add(RepoPaths.File("base-project/.github/scripts/front-end-only.test.sh").Replace('\\', '/'));
+        info.ArgumentList.Add(RepoPaths.File(rel).Replace('\\', '/'));
 
         using var process = Process.Start(info)!;
         var stderr = process.StandardError.ReadToEndAsync();
@@ -107,7 +160,7 @@ public sealed class DeployWorkflowTests
         var output = stdout + await stderr;
 
         process.ExitCode.ShouldBe(0, output);
-        output.ShouldContain("ok   file renamed into src/ui/", Case.Sensitive, output);
+        return output;
     }
 
     // On Windows a bare "bash" can resolve to WSL, which cannot see this path.

@@ -19,7 +19,7 @@ internal sealed partial class InfraCommand(ITemplateRunner runner, TextWriter ou
     private static readonly string[] PackOwned =
     [
         "IaC/backend.tf", "IaC/guards.tf", "IaC/envs/ephemeral.tfvars", "IaC/tests/ephemeral.tftest.hcl", "IaC/RESOURCE-MAP.md",
-        ".github/workflows/deploy.yml",
+        ".github/workflows/deploy.yml", ".github/scripts/wait-for-outputs.sh",
     ];
 
     // Files the pack seeds and the project then tunes. adopt writes them only when they are missing.

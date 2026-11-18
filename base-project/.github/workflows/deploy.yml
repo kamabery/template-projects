@@ -161,23 +161,32 @@ jobs:
             -target=azurerm_container_registry.main \
             -target=module.database \
             -target=azurerm_role_assignment.kv_secrets_deployer
+          bash ../.github/scripts/wait-for-outputs.sh
 
+      # One read: an `echo "X=$(terraform output ...)"` cannot fail the step, so a failed read became an
+      # empty value that failed three steps later. An empty required output fails here instead.
       - name: read outputs
         if: env.FRONT_END_ONLY != 'true'
         working-directory: IaC
         run: |
+          set -euo pipefail
+          terraform output -json > "$RUNNER_TEMP/outputs.json"
+          out() { jq -r --arg k "$1" '.[$k].value // empty' "$RUNNER_TEMP/outputs.json"; }
+          for k in acr_name resource_group_name key_vault_name database_provider appdb_connection_secret_name; do
+            [ -n "$(out "$k")" ] || { echo "::error::terraform output $k is empty"; exit 1; }
+          done
           {
-            echo "ACR_NAME=$(terraform output -raw acr_name)"
-            echo "RG_NAME=$(terraform output -raw resource_group_name)"
-            echo "KV_NAME=$(terraform output -raw key_vault_name)"
-            echo "DB_PROVIDER=$(terraform output -raw database_provider)"
-            echo "APPDB_SECRET=$(terraform output -raw appdb_connection_secret_name)"
-            echo "DB_SERVER=$(terraform output -raw database_server_name 2>/dev/null || true)"
-            echo "DB_SERVER_RG=$(terraform output -raw database_server_resource_group 2>/dev/null || true)"
-            echo "DB_FQDN=$(terraform output -raw database_server_fqdn 2>/dev/null || true)"
-            echo "DB_ROLE=$(terraform output -raw database_role 2>/dev/null || true)"
-            echo "DB_NAMES=$(terraform output -raw database_names 2>/dev/null || true)"
-            echo "DB_STORAGE=$(terraform output -raw database_storage_account_name 2>/dev/null || true)"
+            echo "ACR_NAME=$(out acr_name)"
+            echo "RG_NAME=$(out resource_group_name)"
+            echo "KV_NAME=$(out key_vault_name)"
+            echo "DB_PROVIDER=$(out database_provider)"
+            echo "APPDB_SECRET=$(out appdb_connection_secret_name)"
+            echo "DB_SERVER=$(out database_server_name)"
+            echo "DB_SERVER_RG=$(out database_server_resource_group)"
+            echo "DB_FQDN=$(out database_server_fqdn)"
+            echo "DB_ROLE=$(out database_role)"
+            echo "DB_NAMES=$(out database_names)"
+            echo "DB_STORAGE=$(out database_storage_account_name)"
           } >> "$GITHUB_ENV"
 
       - name: build and push images
@@ -333,6 +342,7 @@ jobs:
             -var-file="envs/${TF_VARS}.tfvars" \
             -var="environment=${TF_ENV}" \
             -var="image_tag=${IMAGE_TAG}"
+          bash ../.github/scripts/wait-for-outputs.sh
 
       # The Blazor WebAssembly host is genuinely cross-origin, and its Static Web App's hostname
       # does not exist until the apply above has run. containerapp.api.tf is part of the base
@@ -354,6 +364,7 @@ jobs:
             -var="environment=${TF_ENV}" \
             -var="image_tag=${IMAGE_TAG}" \
             -var="cors_allowed_origins=[\"${blazor_url}\"]"
+          bash ../.github/scripts/wait-for-outputs.sh
 
       # The widget-completed consumer. Flex Consumption runs code rather than an image, so this is a
       # zip of the published worker rather than an `az acr build`, and it has to follow the apply
