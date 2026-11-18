@@ -194,6 +194,7 @@ public sealed class InfraCommandTests : IDisposable
         WriteTo(dir, "IaC/tests/ephemeral.tftest.hcl", "run \"x\" {}\n");
         WriteTo(dir, "IaC/RESOURCE-MAP.md", "map\n");
         WriteTo(dir, ".github/workflows/deploy.yml", DispatchOnly);
+        WriteTo(dir, ".github/scripts/wait-for-outputs.sh", "# from the pack\n");
     });
 
     private void LocalStateScaffold(string addOns = "")
@@ -233,6 +234,8 @@ public sealed class InfraCommandTests : IDisposable
         Read("IaC/backend.tf").ShouldContain("cloud {}");
         Exists("IaC/guards.tf").ShouldBeTrue();
         Read(".github/workflows/deploy.yml").ShouldNotContain("push:");
+        // The adopted deploy.yml runs it after every apply; without it every step that follows fails.
+        Read(".github/scripts/wait-for-outputs.sh").ShouldBe("# from the pack\n");
         Exists("IaC/envs/ephemeral.tfvars").ShouldBeTrue();
         Exists("IaC/envs/staging.tfvars").ShouldBeTrue();
         Exists("IaC/tests/ephemeral.tftest.hcl").ShouldBeTrue();
