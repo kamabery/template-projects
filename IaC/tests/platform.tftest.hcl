@@ -83,7 +83,8 @@ run "a_preview_uses_the_platform" {
     error_message = "No vault-wide role per preview: it would let every preview read every other's secrets."
   }
   assert {
-    condition     = output.database_server_name == "psql-factory-abc" && output.database_server_resource_group == "rg-factory-platform" && output.database_server_fqdn == "psql-factory-abc.postgres.database.azure.com"
+    # Only a Postgres scaffold uses the platform's server; SQLite and SQL Server scaffolds have none of these outputs.
+    condition     = output.database_provider != "postgres" || (output.database_server_name == "psql-factory-abc" && output.database_server_resource_group == "rg-factory-platform" && output.database_server_fqdn == "psql-factory-abc.postgres.database.azure.com")
     error_message = "A preview must use the platform's Postgres server, and the workflow needs to find it."
   }
 }
@@ -100,11 +101,11 @@ run "names_cannot_collide_on_the_platform" {
     error_message = "Secret names are unique within a vault, so a preview's carry its id."
   }
   assert {
-    condition     = output.database_names == "shelf_j012_appdb shelf_j012_eventstore"
+    condition     = output.database_provider != "postgres" || output.database_names == "shelf_j012_appdb shelf_j012_eventstore"
     error_message = "Database names are unique within a server, so a preview's carry its id."
   }
   assert {
-    condition     = output.database_role == "preview_shelf_j012"
+    condition     = output.database_provider != "postgres" || output.database_role == "preview_shelf_j012"
     error_message = "Each preview gets its own login, so none can reach another's database."
   }
 }
