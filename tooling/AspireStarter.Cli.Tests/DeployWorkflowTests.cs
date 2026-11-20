@@ -52,6 +52,18 @@ public sealed class DeployWorkflowTests
     // An `echo "X=$(terraform output -raw x)"` cannot fail the step: echo succeeds whatever the read did,
     // and the empty value fails three steps later (DB_SERVER_RG, 2026-11-18). One read, and an empty
     // required output fails here.
+    // 2026-11-20, factory J-003 (the first SQLite preview): `az storage file ... --auth-mode login` failed, first on
+    // "--enable-file-backup-request-intent is required", then for want of a file-share data role the deployer doesn't
+    // hold. The account keeps shared keys on for the Container Apps mount, and Contributor can list them.
+    [Fact]
+    public void TheSqliteSeed_ReachesTheShareWithTheAccountKey()
+    {
+        var seed = Step("seed the SQLite file if the share is empty");
+        seed.ShouldNotContain("--auth-mode login");
+        seed.Split("az storage file ").Length.ShouldBe(3);
+        seed.Split("--auth-mode key").Length.ShouldBe(3);
+    }
+
     [Fact]
     public void ReadOutputs_ReadsOnce_AndFailsOnAnEmptyRequiredOutput()
     {
