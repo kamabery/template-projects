@@ -1,20 +1,69 @@
 @page "/"
+@inherits ViewModelComponentBase<WidgetsViewModel>
+
+@* The dashboard home (docs/DESIGN.md, 4.1): a complete view of the entities, not a description of
+   the application. One tile and one panel per entity; the scaffold owns one, so it has one of each.
+   A new entity adds its own tile and panel here. The React home at src/ui/react/src/routes/index.tsx
+   is the same page. *@
 
 <PageTitle>Home</PageTitle>
 
-<h1>Template.Blazor.Maui</h1>
+<h1>Home</h1>
 
-<FluentCard>
-    <p>
-        Every page and component you can navigate to lives in
-        <code>Template.Blazor.Maui.Pages</code>. The MAUI Blazor Hybrid host and the Blazor
-        WebAssembly host both render these same files - neither has any UI of its own.
-    </p>
-    <ul>
-        <li><strong>Widgets</strong> exercises a ViewModel, the generated Refit client, and <code>template.api</code>.</li>
-    </ul>
-    <p>
-        The React app in <code>src/ui/react</code> renders the same three pages against the same
-        API, so the two front ends can be compared side by side.
-    </p>
-</FluentCard>
+<div class="stat-tiles">
+    <a class="stat-tile" href="widgets" data-testid="count-tile"
+       aria-label="@($"{ViewModel.Widgets.Count} widgets")">
+        <span class="stat-tile-label">Widgets</span>
+        <span class="stat-tile-value">@(ViewModel.IsLoading ? "…" : ViewModel.Widgets.Count)</span>
+        <span class="stat-tile-qualifier">in total</span>
+    </a>
+</div>
+
+<section class="panel" aria-label="Recently updated widgets" aria-busy="@ViewModel.IsLoading"
+         data-testid="recent-panel">
+    <header class="panel-header">
+        <h4>Recently updated widgets</h4>
+        <a href="widgets">View all</a>
+    </header>
+    <div class="panel-body">
+        @if (ViewModel.IsLoading)
+        {
+            <FluentSkeleton Width="100%" Height="1rem" Shape="SkeletonShape.Rect" />
+            <FluentSkeleton Width="80%" Height="1rem" Shape="SkeletonShape.Rect" />
+            <FluentSkeleton Width="60%" Height="1rem" Shape="SkeletonShape.Rect" />
+        }
+        else if (ViewModel.ErrorMessage is not null)
+        {
+            <div role="alert">
+                <FluentMessageBar Intent="MessageIntent.Error" AllowDismiss="false">
+                    @ViewModel.ErrorMessage
+                </FluentMessageBar>
+            </div>
+        }
+        else if (ViewModel.Widgets.Count == 0)
+        {
+            <p data-testid="first-run">
+                No widgets yet. They appear here and on <a href="widgets">the list</a> as soon as the
+                API has one.
+            </p>
+        }
+        else
+        {
+            <ul class="panel-list">
+                @foreach (var widget in Recent)
+                {
+                    <li data-testid="recent-row">
+                        <a href="widgets">@widget.Name</a>
+                        <span class="numeric">@widget.Quantity</span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</section>
+
+@code {
+    // At most five rows: a panel that wants more is a list route (DESIGN.md 4.1).
+    private IEnumerable<Widget> Recent =>
+        ViewModel.Widgets.OrderByDescending(w => w.UpdatedOn).Take(5);
+}

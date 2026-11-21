@@ -194,8 +194,9 @@ describing **only** what was actually generated — never the options that were 
   point of that choice), and a resource/port table listing only the resources that exist.
 - The reproducing command line, verbatim, including every flag.
 - If a UI was generated: the **`/styleguide` route**, one line saying it renders every approved
-  component and that `docs/DESIGN.md` is the rules behind it. It ships in every configuration, so a
-  README that omits it hands someone a route they will find by accident.
+  component and that `docs/DESIGN.md` is the rules behind it. It is a local tool: it renders, and the
+  nav offers it, only in a dev build (React) or the Development environment (Blazor); a deployed app
+  404s there.
 - **Deploying it**: a short section pointing at `IaC/README.md`, naming the Azure services that
   actually apply to this scaffold and no others — Container Apps for the API (and the events service
   if there is one), Static Web Apps for the front ends that exist, and the managed store matching

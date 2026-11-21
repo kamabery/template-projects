@@ -2,12 +2,19 @@
 
    FluentNavMenu ships a JS module (FluentNavMenu.razor.js). Under bUnit's loose JSInterop an
    imported module resolves to null, so any component that calls into it throws. Keeping the shared
-   navigation JS-free means it renders in both hosts and is testable without stubbing modules. *@
+   navigation JS-free means it renders in both hosts and is testable without stubbing modules.
+
+   Style guide is a local tool: it is offered only in Development, as the React nav is under
+   import.meta.env.DEV. *@
+@inject AppEnvironment Environment
 
 <nav class="nav-menu">
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="4">
         <NavLink class="nav-item" href="" Match="NavLinkMatch.All">Home</NavLink>
         <NavLink class="nav-item" href="widgets">Widgets</NavLink>
-        <NavLink class="nav-item" href="styleguide">Style guide</NavLink>
+        @if (Environment.IsDevelopment)
+        {
+            <NavLink class="nav-item" href="styleguide">Style guide</NavLink>
+        }
     </FluentStack>
 </nav>

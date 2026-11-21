@@ -101,7 +101,10 @@ function RootLayout() {
                 Home
               </NavItem>
               <NavItem to="/widgets">Widgets</NavItem>
-              <NavItem to="/styleguide">Style guide</NavItem>
+              {/* The style guide is a local tool: dev builds only. */}
+              {import.meta.env.DEV && (
+                <NavItem to="/styleguide">Style guide</NavItem>
+              )}
             </NavBar>
 
             <div className="ml-auto flex items-center gap-3">

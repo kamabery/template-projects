@@ -1,6 +1,7 @@
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Template.Blazor.Maui.Pages.Hosting;
 
 namespace Template.Blazor.Maui.Tests.Infrastructure;
 
@@ -30,5 +31,9 @@ public abstract class FluentUiTestContext : BunitContext
         JSInterop.SetupModule("_content/Microsoft.FluentUI.AspNetCore.Components/fluent-ui-components.min.js");
 
         Services.AddFluentUIComponents();
+
+        // The style guide is a Development-only page, so the tests render as a Development host by
+        // default. A test about production registers its own AppEnvironment after this one.
+        Services.AddSingleton(new AppEnvironment(IsDevelopment: true));
     }
 }

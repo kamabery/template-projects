@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Template.Blazor.Maui.Pages.Auth;
+using Template.Blazor.Maui.Pages.Hosting;
 using Template.Blazor.Maui.Pages.Mvvm;
 using Template.Blazor.Maui.Pages.Telemetry;
 using Template.Blazor.Maui.Web;
@@ -13,6 +14,9 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddFluentUIComponents();
+
+// The style guide is a local tool: shown only when the host runs as Development.
+builder.Services.AddSingleton(new AppEnvironment(builder.HostEnvironment.IsDevelopment()));
 
 // Both hosts call the same two extension methods from the shared library, which is what keeps
 // their DI graphs from drifting apart.

@@ -77,7 +77,8 @@ Every screen is built from the components in `src/components/ui/`, and every one
 of those is built from the tokens in `src/index.css`. `/styleguide` renders the
 whole set live - each component with its variants, its states, an accessibility
 note and the code to copy. Read it before writing new markup; a variant that is
-missing belongs there first, not in one screen.
+missing belongs there first, not in one screen. It is a local tool: dev builds
+only (`npm run dev`); a production build 404s there and has no nav item for it.
 
 The Blazor front end publishes the same sections in the same order at its own
 `/styleguide`, mapped onto FluentUI. The two are meant to be read side by side.

@@ -1,6 +1,7 @@
 @page "/styleguide"
 @inject IDialogService DialogService
 @inject IToastService ToastService
+@inject AppEnvironment Environment
 
 @* Living style guide. Every approved component, every variant, every state.
 
@@ -8,12 +9,18 @@
    (src/ui/react/src/routes/styleguide.tsx). Keep the two lists aligned: reading them side by side
    is the point of this repository carrying two front ends.
 
-   It ships in every configuration rather than being gated on Development. A @page cannot be gated
-   as cheaply as a React route, and gating only the React one would make the two drift.
+   It is a local tool: outside Development it renders the app's Not found page, and the nav does
+   not offer it, as the React guide is gated on import.meta.env.DEV. A deployed app never shows it.
 
    Where a section names a FluentUI component, that component IS the approved implementation of the
    contract - this library wraps almost nothing, because FluentUI already is the component library
    on this side. AppField is the one exception, and the Form validation message section says why. *@
+
+@if (!Environment.IsDevelopment)
+{
+    <NotFound />
+    return;
+}
 
 <PageTitle>Style guide</PageTitle>
 
