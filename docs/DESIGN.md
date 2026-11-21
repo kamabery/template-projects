@@ -122,8 +122,9 @@ detail route you navigate away to**, abandoning the list and everything the user
 
 **Home is a complete view of the entities, not a description of the application.** A home page that
 explains the stack, welcomes the user, or lists the libraries in use is a README that got rendered.
-The sample home page in this workspace is currently exactly that, and it is the thing this section
-exists to stop being copied - see *4.5 What this workspace does and does not yet show*.
+The sample home page used to be exactly that, and two scaffolded applications shipped it as their
+front door. It is now the smallest dashboard these rules allow - one tile and one panel for the one
+entity the scaffold owns - and a new entity adds its own tile and panel to it.
 
 The rules:
 
@@ -256,10 +257,14 @@ Be clear about the gap, rather than letting the next reader take the sample page
   specimens over fabricated data. The specimens hold the open row in local state and say so in their
   intent text - the guide is one page and cannot route - while the copyable snippet under each shows
   the routed form a product screen must use.
-- **The sample `/` and `/widgets` pages do not follow this yet.** Home is the stack blurb 4.1
-  describes as the thing not to copy, and the widgets list has no detail affordance at all: the API
-  serves the collection only, with no `GET /widgets/{id}` behind it. Bringing them into line is
-  known, unstarted work. Until it is done, **read the guide, not the sample pages.**
+- **The sample `/` follows 4.1 at its smallest**: a count tile and a panel of at most five recently
+  updated rows, each a link into the list, with its own loading, failure and first-run states. Its
+  tile counts everything, so it links to the unfiltered list; a tile that counts a subset needs the
+  list to take that filter first.
+- **The sample `/widgets` page does not follow this yet.** The list has no detail affordance at all:
+  the API serves the collection only, with no `GET /widgets/{id}` behind it, so the panel's rows open
+  the list rather than a detail modal. Bringing it into line is known, unstarted work. Until it is
+  done, **read the guide, not the sample list.**
 
 ### 4.6 The composition contracts
 
