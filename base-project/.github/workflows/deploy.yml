@@ -312,13 +312,15 @@ jobs:
       # So the schema is built here and the file uploaded - once. Uploading again would overwrite
       # whatever the running service has written since, which is why this is guarded on absence
       # rather than run every time. A later schema change on this branch is a manual operation, and
-      # that is one of the costs of choosing SQLite.
+      # that is one of the costs of choosing SQLite. The share is reached with the account key: the account
+      # keeps shared keys on for the Container Apps mount, and the deployer has no file-share data role
+      # (`--auth-mode login` failed on the first SQLite preview, factory J-003).
       - name: seed the SQLite file if the share is empty
         if: env.FRONT_END_ONLY != 'true' && env.DB_PROVIDER == 'sqlite'
         run: |
           set -euo pipefail
           exists=$(az storage file exists --account-name "$DB_STORAGE" --share-name data \
-                     --path app.db --auth-mode login --query exists -o tsv)
+                     --path app.db --auth-mode key --query exists -o tsv)
           if [ "$exists" = "true" ]; then
             echo "app.db is already on the share; leaving it alone."
             exit 0
@@ -332,7 +334,7 @@ jobs:
             --startup-project "$(ls -d src/*.api | head -1)" \
             --connection "Data Source=$PWD/app.db"
           az storage file upload --account-name "$DB_STORAGE" --share-name data \
-            --source "$PWD/app.db" --path app.db --auth-mode login
+            --source "$PWD/app.db" --path app.db --auth-mode key
 
       - name: terraform apply
         if: env.FRONT_END_ONLY != 'true'
