@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, notFound } from '@tanstack/react-router'
 import { Group, Row, Section, Swatch, SwatchGrid } from '@/components/styleguide/parts'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -27,14 +27,20 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/cn'
 
-export const Route = createFileRoute('/styleguide')({ component: StyleGuidePage })
+// A local tool: dev builds only. A production build 404s here (the root's notFoundComponent), and
+// with DEV folded to false the page and everything only it imports drop out of the bundle. The
+// Blazor guide is gated the same way, on the Development environment.
+export const Route = createFileRoute('/styleguide')({
+  beforeLoad: () => {
+    if (!import.meta.env.DEV) throw notFound()
+  },
+  component: import.meta.env.DEV ? StyleGuidePage : () => null,
+})
 
 /**
  * Living style guide. Every approved component, every variant, every state.
  *
- * It ships in production builds rather than being gated on DEV: it is the
- * documentation for a starter project, and the Blazor guide at the same path
- * cannot be gated as cheaply, so gating this one would only make the two drift.
+ * A local tool, like the Blazor guide at the same path: see the Route above.
  */
 function StyleGuidePage() {
   return (

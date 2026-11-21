@@ -5,8 +5,10 @@ This is the owner of the design doctrine for this workspace and for every projec
 copy is the drift this file exists to prevent.
 
 The system is not a document. It is a **token vocabulary**, a **set of approved components**, and a
-**living style guide per front end** at `/styleguide` that renders every one of them. This file is the
-part a person or an agent reads before touching a screen.
+**living style guide per front end** at `/styleguide` that renders every one of them. The guides are
+local tools: each renders, and its nav item shows, only in a dev build (React) or the Development
+environment (Blazor), so a deployed app never offers one. This file is the part a person or an agent
+reads before touching a screen.
 
 ---
 

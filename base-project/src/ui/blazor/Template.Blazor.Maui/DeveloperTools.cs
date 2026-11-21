@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Template.Blazor.Maui.Pages.Hosting;
 
 namespace Template.Blazor.Maui;
 
@@ -21,5 +22,6 @@ public static partial class MauiProgram
     {
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
+        builder.Services.AddSingleton(new AppEnvironment(IsDevelopment: true));
     }
 }

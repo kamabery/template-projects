@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Template.Blazor.Maui.Pages.Hosting;
 using Template.Blazor.Maui.Pages.Mvvm;
 using Template.Blazor.Maui.Pages.Telemetry;
 using Template.Blazor.Maui.Services;
@@ -51,6 +52,9 @@ public static partial class MauiProgram
         // conditionals, whatever the symbol, and deletes the region - a scaffolded MAUI host
         // silently lost these two lines. Selecting a file from MSBuild says the same thing and
         // survives scaffolding intact.
+        // Production unless DeveloperTools.cs (Debug and Development only) registers a Development
+        // one after it; the last registration wins. It gates the style guide, a local tool.
+        builder.Services.AddSingleton(new AppEnvironment(IsDevelopment: false));
         AddDeveloperTools(builder);
 
         var app = builder.Build();

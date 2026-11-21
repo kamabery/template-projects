@@ -134,8 +134,9 @@ All three front ends serve the same three routes:
   states, an accessibility note and the code to copy. React renders its own components from
   `src/ui/react/src/components/ui/`; Blazor renders the FluentUI components those map onto. The two
   guides list the same sections in the same order, so they can be read side by side - which is the
-  reason this repository carries two front ends at all. Both ship in every configuration; neither is
-  gated on Development.
+  reason this repository carries two front ends at all. Both are local tools: they render, and the
+  nav offers them, only in a dev build (React, `import.meta.env.DEV`) or the Development environment
+  (Blazor, `AppEnvironment`). A production build 404s at `/styleguide`.
 
 React additionally has an Auto/Light/Dark control in the header; Blazor has the equivalent switch
 in its `FluentHeader`.

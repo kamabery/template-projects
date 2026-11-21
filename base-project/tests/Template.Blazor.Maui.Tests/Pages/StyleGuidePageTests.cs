@@ -1,4 +1,6 @@
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
+using Template.Blazor.Maui.Pages.Hosting;
 using Template.Blazor.Maui.Tests.Infrastructure;
 
 namespace Template.Blazor.Maui.Tests.Pages;
@@ -23,6 +25,19 @@ namespace Template.Blazor.Maui.Tests.Pages;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public sealed class StyleGuidePageTests : FluentUiTestContext
 {
+    // Outside Development the route still exists (a @page cannot be compiled out), so it renders the
+    // app's Not found page instead of the guide.
+    [Fact]
+    public void Render_OutsideDevelopment_IsNotFound()
+    {
+        Services.AddSingleton(new AppEnvironment(IsDevelopment: false));
+
+        var component = Render<Blazor.Maui.Pages.Pages.StyleGuide>();
+
+        component.FindComponents<Blazor.Maui.Pages.Pages.NotFound>().Count.ShouldBe(1);
+        component.Markup.ShouldNotContain("Foundations", Case.Sensitive);
+    }
+
     [Fact]
     public void Render_DoesNotThrow()
     {

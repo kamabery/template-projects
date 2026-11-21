@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Template.Blazor.Maui.Pages.Auth;
+using Template.Blazor.Maui.Pages.Hosting;
 using Template.Blazor.Maui.Pages.Layout;
 using Template.Blazor.Maui.Pages.Telemetry;
 using Template.Blazor.Maui.Tests.Infrastructure;
@@ -54,10 +55,22 @@ public sealed class MainLayoutTests : FluentUiTestContext
     }
 
     [Fact]
-    public void Render_LinksToTheStyleGuide()
+    public void Render_InDevelopment_LinksToTheStyleGuide()
     {
         var component = Render<MainLayout>();
 
         component.Markup.ShouldContain("styleguide", Case.Sensitive);
+    }
+
+    // The style guide is a local tool: a deployed app's nav never offers it.
+    [Fact]
+    public void Render_OutsideDevelopment_HasNoStyleGuideLink()
+    {
+        Services.AddSingleton(new AppEnvironment(IsDevelopment: false));
+
+        var component = Render<MainLayout>();
+
+        component.Markup.ShouldNotContain("styleguide", Case.Insensitive);
+        component.Markup.ShouldNotContain("Style guide", Case.Insensitive);
     }
 }
