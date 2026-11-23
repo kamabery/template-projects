@@ -74,6 +74,44 @@ public sealed class ClientTelemetryOptionsTests
             () => options.ServiceName.ShouldBe("maui"));
     }
 
+    [Fact]
+    public async Task FetchAsync_WhenTheApiNamesItsRelay_PointsAtIt()
+    {
+        // An Azure deployment: no dashboard, Application Insights behind the API's relay.
+        using var client = Api("""{"endpoint":null,"protocol":null,"headers":null,"relay":"otel"}""");
+
+        var options = await ClientTelemetryOptions.FetchAsync(client, "blazor-web");
+
+        options.ShouldSatisfyAllConditions(
+            () => options.RelayEndpoint.ShouldBe(new Uri("https://api.example.test/otel")),
+            () => options.Endpoint.ShouldBeNull(),
+            () => options.IsEnabled.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task FetchAsync_WithADashboard_PrefersItToTheRelay()
+    {
+        using var client = Api(
+            """{"endpoint":"http://localhost:19114","protocol":"http/protobuf","headers":"x-otlp-api-key=k","relay":"otel"}""");
+
+        var options = await ClientTelemetryOptions.FetchAsync(client, "blazor-web");
+
+        options.ShouldSatisfyAllConditions(
+            () => options.Endpoint.ShouldBe("http://localhost:19114"),
+            () => options.RelayEndpoint.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task FetchAsync_WithNeither_IsDisabled()
+    {
+        using var client = Api("""{"endpoint":null,"protocol":null,"headers":null,"relay":null}""");
+
+        (await ClientTelemetryOptions.FetchAsync(client, "blazor-web")).IsEnabled.ShouldBeFalse();
+    }
+
+    private static HttpClient Api(string configJson) =>
+        new(new CapturingHttpHandler(configJson)) { BaseAddress = new Uri("https://api.example.test/") };
+
     private static IConfiguration Configuration(Dictionary<string, string?> values) =>
         new ConfigurationBuilder().AddInMemoryCollection(values).Build();
 }

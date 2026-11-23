@@ -54,6 +54,21 @@ public sealed class TelemetryServiceCollectionExtensionsTests
             () => provider.GetService<MeterProvider>().ShouldBeNull());
     }
 
+    [Fact]
+    public void AddSharedTelemetry_WithARelay_RegistersTracesButNoMetrics()
+    {
+        // The WebAssembly host in Azure. The relay takes traces and logs only.
+        using var provider = Build(Disabled with
+        {
+            RelayEndpoint = new Uri("https://api.example.test/otel"),
+            IsSingleThreadedRuntime = true,
+        });
+
+        provider.ShouldSatisfyAllConditions(
+            () => provider.GetService<TracerProvider>().ShouldNotBeNull(),
+            () => provider.GetService<MeterProvider>().ShouldBeNull());
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

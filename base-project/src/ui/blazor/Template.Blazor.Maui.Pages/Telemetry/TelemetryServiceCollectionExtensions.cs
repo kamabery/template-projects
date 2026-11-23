@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
@@ -68,24 +69,35 @@ public static class TelemetryServiceCollectionExtensions
                 .Select(pair => new KeyValuePair<string, object>(pair.Key, pair.Value)))
             .AddService(options.ServiceName);
 
-        services.AddSingleton(serviceProvider => Sdk.CreateTracerProviderBuilder()
-            .SetResourceBuilder(resource)
-            .AddSource(ClientTelemetry.ActivitySource.Name)
-            // Puts traceparent on the Refit calls in AddSharedProviders, which is what continues a
-            // click in either front end into the API's own spans. The WebAssembly host is genuinely
-            // cross-origin, so that header survives preflight only because CorsConfigurator allows
-            // any header.
-            .AddHttpClientInstrumentation()
-            .AddOtlpExporter(exporter =>
-                ConfigureExporter(exporter, options, "/v1/traces", serviceProvider, "OtlpTraceExporter"))
-            .Build());
+        // In Azure there is no dashboard: traces and logs go to the API's relay as OTLP/HTTP JSON,
+        // which the .NET OTLP exporter cannot write, so the hand-written exporters take over.
+        var relay = string.IsNullOrWhiteSpace(options.Endpoint) ? options.RelayEndpoint : null;
+
+        services.AddSingleton(serviceProvider =>
+        {
+            var tracing = Sdk.CreateTracerProviderBuilder()
+                .SetResourceBuilder(resource)
+                .AddSource(ClientTelemetry.ActivitySource.Name)
+                // Puts traceparent on the Refit calls in AddSharedProviders, which is what continues a
+                // click in either front end into the API's own spans. The WebAssembly host is genuinely
+                // cross-origin, so that header survives preflight only because CorsConfigurator allows
+                // any header.
+                .AddHttpClientInstrumentation();
+
+            return (relay is null
+                    ? tracing.AddOtlpExporter(exporter =>
+                        ConfigureExporter(exporter, options, "/v1/traces", serviceProvider, "OtlpTraceExporter"))
+                    : tracing.AddProcessor(ExportProcessor(
+                        new OtlpJsonTraceExporter(RelayClient(serviceProvider, "RelayTraceExporter"), relay), options)))
+                .Build();
+        });
 
         // Metrics only where a MeterProvider can actually export. Its reader collects and exports on
         // a dedicated thread, and the browser runtime never runs that thread - nor, as it turns out,
         // any timer continuation this library could drive it from instead. Registering it there
         // would be wiring that looks live and is not, so the WebAssembly host reports traces and
-        // logs and says so.
-        if (!options.IsSingleThreadedRuntime)
+        // logs and says so. None for the relay either: it takes traces and logs only.
+        if (!options.IsSingleThreadedRuntime && relay is null)
         {
             services.AddSingleton(serviceProvider => Sdk.CreateMeterProviderBuilder()
                 .SetResourceBuilder(resource)
@@ -105,11 +117,34 @@ public static class TelemetryServiceCollectionExtensions
             logs.SetResourceBuilder(resource);
             logs.IncludeFormattedMessage = true;
             logs.IncludeScopes = true;
-            logs.AddOtlpExporter(exporter => ConfigureExporter(exporter, options, "/v1/logs"));
+            if (relay is null)
+            {
+                logs.AddOtlpExporter(exporter => ConfigureExporter(exporter, options, "/v1/logs"));
+            }
+            else
+            {
+                logs.AddProcessor(serviceProvider => ExportProcessor(
+                    new OtlpJsonLogExporter(RelayClient(serviceProvider, "RelayLogExporter"), relay), options));
+            }
         }));
 
         return services;
     }
+
+    private static Func<HttpClient> RelayClient(IServiceProvider serviceProvider, string clientName) =>
+        () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(clientName);
+
+    /// <summary>One span or record at a time where no background thread runs - see
+    /// <see cref="ClientTelemetryOptions.IsSingleThreadedRuntime"/> - batched elsewhere.</summary>
+    private static BaseProcessor<Activity> ExportProcessor(BaseExporter<Activity> exporter, ClientTelemetryOptions options) =>
+        options.IsSingleThreadedRuntime
+            ? new SimpleActivityExportProcessor(exporter)
+            : new BatchActivityExportProcessor(exporter);
+
+    private static BaseProcessor<LogRecord> ExportProcessor(BaseExporter<LogRecord> exporter, ClientTelemetryOptions options) =>
+        options.IsSingleThreadedRuntime
+            ? new SimpleLogRecordExportProcessor(exporter)
+            : new BatchLogRecordExportProcessor(exporter);
 
     /// <summary>
     /// Starts the telemetry providers. Both hosts call this on the built application.

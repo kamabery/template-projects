@@ -46,9 +46,17 @@ public sealed record ClientTelemetryOptions
     /// </remarks>
     public bool IsSingleThreadedRuntime { get; init; }
 
-    /// <summary>Nothing is exported without an endpoint - the same gate the React front end applies
-    /// in src/ui/react/src/lib/telemetry.ts and servicedefaults applies in Extensions.cs.</summary>
-    public bool IsEnabled => !string.IsNullOrWhiteSpace(Endpoint);
+    /// <summary>
+    /// The API's browser telemetry relay, in Azure, where there is no dashboard: traces and logs go
+    /// there as OTLP/HTTP JSON and on to Application Insights. Null when <see cref="Endpoint"/> is
+    /// set, or when the API has no relay.
+    /// </summary>
+    public Uri? RelayEndpoint { get; init; }
+
+    /// <summary>Nothing is exported without somewhere to send it - the same gate the React front end
+    /// applies in src/ui/react/src/lib/telemetryTarget.ts and servicedefaults applies in
+    /// Extensions.cs.</summary>
+    public bool IsEnabled => !string.IsNullOrWhiteSpace(Endpoint) || RelayEndpoint is not null;
 
     /// <summary>
     /// gRPC is the .NET OpenTelemetry SDK's default when the protocol variable is absent.
@@ -98,27 +106,47 @@ public sealed record ClientTelemetryOptions
         string serviceName,
         CancellationToken cancellationToken = default)
     {
+        using var client = new HttpClient { BaseAddress = apiBaseAddress };
+
+        return await FetchAsync(client, serviceName, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <see cref="FetchAsync(Uri, string, CancellationToken)"/> on a client whose BaseAddress is the
+    /// API. A dashboard endpoint wins; otherwise the relay the API names, resolved against that
+    /// base address, is used in Azure.
+    /// </summary>
+    public static async Task<ClientTelemetryOptions> FetchAsync(
+        HttpClient api,
+        string serviceName,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+
         var disabled = new ClientTelemetryOptions { ServiceName = serviceName };
 
         try
         {
-            using var client = new HttpClient { BaseAddress = apiBaseAddress };
-
-            var relayed = await client
+            var relayed = await api
                 .GetFromJsonAsync<RelayedConfig>("client-telemetry/config", cancellationToken)
                 .ConfigureAwait(false);
 
-            if (relayed?.Protocol != "http/protobuf")
+            if (relayed?.Protocol == "http/protobuf" && !string.IsNullOrWhiteSpace(relayed.Endpoint))
             {
-                return disabled;
+                return disabled with
+                {
+                    Endpoint = relayed.Endpoint,
+                    Protocol = relayed.Protocol,
+                    Headers = relayed.Headers
+                };
             }
 
-            return disabled with
+            if (!string.IsNullOrWhiteSpace(relayed?.Relay) && api.BaseAddress is { } baseAddress)
             {
-                Endpoint = relayed.Endpoint,
-                Protocol = relayed.Protocol,
-                Headers = relayed.Headers
-            };
+                return disabled with { RelayEndpoint = new Uri(baseAddress, relayed.Relay) };
+            }
+
+            return disabled;
         }
         catch (Exception)
         {
@@ -157,5 +185,5 @@ public sealed record ClientTelemetryOptions
     /// rather than shared because this library must not reference the API - the dependency runs the
     /// other way.
     /// </summary>
-    private sealed record RelayedConfig(string? Endpoint, string? Protocol, string? Headers);
+    private sealed record RelayedConfig(string? Endpoint, string? Protocol, string? Headers, string? Relay);
 }
