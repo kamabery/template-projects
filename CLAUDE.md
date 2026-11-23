@@ -585,8 +585,10 @@ logs. The WebAssembly host gets **traces and logs only** — see the WASM constr
 a process the AppHost starts, so `AddEnvironmentVariables()` in `MauiProgram` is enough. A browser
 has no environment to read, and the WASM host's `wwwroot/appsettings.json` is a static file that
 cannot carry the dashboard's per-run OTLP API key — so it asks the API instead, at
-`GET /client-telemetry/config` (`ClientTelemetryController`, Development only, and unconditional
-because `stage.ps1` would strip a `//#if (includeBlazorWeb)` region out of every base scaffold).
+`GET /client-telemetry/config` (`ClientTelemetryController`, unconditional because `stage.ps1` would
+strip a `//#if (includeBlazorWeb)` region out of every base scaffold). It hands out the OTLP settings
+in Development only; outside it, it answers only when Application Insights is configured, and then
+only with the relay's path (see "Azure — the browser relay" below).
 That is also why `api` carries `WithOtlpExporter(OtlpProtocol.HttpProtobuf)` in `apphost.cs`: a
 browser cannot speak gRPC, so the endpoint the API hands out has to be one it can post to.
 
@@ -611,6 +613,30 @@ so browser-origin OTLP needs no further dashboard configuration.
 **Do not use `OpenTelemetry.Extensions.Hosting` here.** Its `AddOpenTelemetry()` starts the SDK from
 an `IHostedService`, and a `WebAssemblyHost` never runs hosted services — the providers would be
 configured and then never started, again with nothing to say so.
+
+### Azure — the browser relay
+
+In Azure there is no dashboard. The services export to Application Insights through the Azure
+Monitor distro (`UseAzureMonitor()` in servicedefaults, on when `APPLICATIONINSIGHTS_CONNECTION_STRING`
+is set), and the browser's telemetry goes through the API: `POST /api/otel/v1/traces` and
+`/api/otel/v1/logs` (`OtlpRelayController`, `Telemetry/BrowserTelemetryRelay.cs`). Things worth
+knowing before changing it (`specs/azure-monitor-telemetry.md`, Q2, R1-R6):
+
+- **OTLP/JSON only, traces and logs only.** React uses the `-otlp-http` exporters on this path
+  (`src/lib/telemetryTarget.ts`) and keeps `-proto` for the dashboard; the .NET OTLP exporter has no
+  JSON mode, so Blazor uses the hand-written `OtlpJsonTraceExporter` / `OtlpJsonLogExporter`.
+- **Spans are re-created, not forwarded.** Each becomes an Activity on the API's own source with
+  the browser's trace id, times, kind, status and attributes and `relay.source = browser`; span ids
+  are new (an Activity cannot be given one). Browser logs are written through `ILogger` under the
+  `Browser` category, so Serilog's levels apply to them.
+- **The guard is the security story**: no route without Application Insights; `Sec-Fetch-Site:
+  same-origin` (not Origin against Host, which the Static Web App's linked backend breaks) or an
+  Origin in `Cors:AllowedOrigins`; 64 KB; 120 requests a minute keyed on the first
+  `X-Forwarded-For` entry. `OtlpRelayGuardTests` covers each refusal.
+- **Discovery is at run time**, through `/client-telemetry/config`'s `relay` field, so a preview
+  needs no build variable. The relay is excluded from the OpenAPI contract.
+- **Postgres and SQL Server queries are dependency spans** through the Aspire EF integrations
+  (`DatabaseSpanTests`); SQLite has none.
 
 ### The fault-injection endpoints
 

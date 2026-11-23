@@ -1,6 +1,6 @@
 # Azure Monitor telemetry: what a scaffold emits reaches Application Insights
 
-**Status:** decided, not started. Written 2026-11-23; Kurt answered the open questions the same day (see Decisions),
+**Status:** built on feature/azure-monitor-telemetry (code, clients, IaC tests and docs, 2026-11-23); packs, `aspire run` and the live check to go. Written 2026-11-23; Kurt answered the open questions the same day (see Decisions),
 then a review against the code found gaps and he settled those too (see "Logging" and "Review follow-ups"; where they
 differ from Scope or Tests, they win).
 **Owner of the decisions:** Kurt.

@@ -407,17 +407,22 @@ way back in.
 
 Every service logs through Serilog, wired once in `src/template.servicedefaults/SerilogExtensions.cs`
 and picked up by the single `builder.AddServiceDefaults()` call each of them already makes. It writes
-to the console, and — whenever the AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT` — to the Aspire
-dashboard over OTLP. Run a service on its own and the OTLP sink is simply not added.
+to the console, and hands every event to the OpenTelemetry logging provider
+(`OpenTelemetryLogForwarder`). That provider is the one way out: to the Aspire dashboard whenever the
+AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT`, to Application Insights whenever
+`APPLICATIONINSIGHTS_CONNECTION_STRING` is set (see "In Azure" below), to both, or to nowhere when a
+service runs on its own. Template properties and `LogContext` enrichments arrive as attributes, and
+each record carries its request's trace id.
 
 Levels live under `Serilog:MinimumLevel` in each service's `appsettings.json`. **Serilog does not
 read `Logging:LogLevel`**, so those sections were replaced rather than left in place to mislead;
-the AppHost keeps its own, because it is not a service and does not get Serilog.
+the AppHost keeps its own, because it is not a service and does not get Serilog. App code logs at
+Information and the framework at Warning; EF Core's per-command SQL lines are left out, because each
+query is already a database span. In Production the console keeps Warning and above only: Container
+Apps copies console output into the same workspace, so Information would be stored twice.
 
-Serilog replaces `ILoggerFactory` outright and does not write to `ILoggerProvider`s, which is what
-keeps the OpenTelemetry logging provider from exporting every record a second time. `ConfigureSerilog`
-also clears the providers so that removal is visible rather than implied — which is why it runs
-after `ConfigureOpenTelemetry` and not before.
+`ConfigureSerilog` clears the host's default logging providers, so it runs **before**
+`ConfigureOpenTelemetry`: the OpenTelemetry provider registered after it is the one that survives.
 
 There is no `UseSerilogRequestLogging`: the OpenTelemetry ASP.NET Core instrumentation already
 records every request as a span, and the dashboard's trace view is a better place to read them.
@@ -443,9 +448,68 @@ the browser because they are switched to export one span at a time.
 The two hosts find the dashboard differently, because their runtimes differ. MAUI is a process the
 AppHost starts, so the `OTEL_*` variables are simply in its environment. A browser has no
 environment to read, and `wwwroot/appsettings.json` is a static file that cannot carry an API key
-regenerated on every run — so the WebAssembly host asks the API, at `GET /client-telemetry/config`
-(Development only). Run either host outside `aspire run` and there is nothing to report to, so
-telemetry switches itself off, exactly as the React app does.
+regenerated on every run — so the WebAssembly host asks the API, at `GET /client-telemetry/config`.
+In Azure the same call names the API's relay instead (below). Run either host outside `aspire run`,
+against an API with no Application Insights, and there is nothing to report to, so telemetry
+switches itself off, exactly as the React app does.
+
+### In Azure: Application Insights
+
+Every deployed environment — dev, staging, a factory preview — has its own Application Insights
+(`IaC/observability.tf`), and it is the Aspire dashboard's twin. The services send to it themselves:
+`AddServiceDefaults` turns on the Azure Monitor OpenTelemetry exporter (`UseAzureMonitor()`)
+whenever `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, which the IaC does for every container app
+and the Function app that runs template code. Nothing in the Container Apps environment forwards
+telemetry, so a service without that setting is invisible.
+
+Where to look, in the portal under the environment's `appi-<project>-<env>`:
+
+| Aspire dashboard | Application Insights |
+| --- | --- |
+| Traces, one trace | **Transaction search** → open an item → the end-to-end transaction view |
+| Traces, errors | **Failures** (by operation, by exception, by dependency) |
+| Traces, durations | **Performance** (operations and dependencies, slowest first) |
+| Structured logs | **Logs**: `traces` (properties under `customDimensions`), `exceptions` |
+| Metrics | **Metrics** |
+
+One user action is one `operation_Id` from the page to the database:
+
+- **The browser.** Neither front end holds the connection string. In Azure, `GET
+  /api/client-telemetry/config` names the API's relay, and the page posts its spans and error logs
+  there as OTLP/JSON (`/api/otel/v1/traces`, `/api/otel/v1/logs`). The API re-creates each span as one
+  of its own, keeping its trace id, times, status and attributes (span ids are new), and writes each
+  browser log through `ILogger` under the `Browser` category. Relayed items carry
+  `relay.source = browser` and appear under the API's role name, as `dependencies` (not `pageViews`)
+  and `traces`. The relay takes only same-origin requests or an origin in `Cors:AllowedOrigins`, at
+  most 64 KB, and 120 requests a minute per client; it is not there at all without Application
+  Insights.
+- **The API request** continues the browser's trace through `traceparent`.
+- **The database call** is a dependency under it: Postgres and SQL Server spans come with the Aspire
+  EF integrations. SQLite has none.
+
+```kusto
+// One Save, from the page to the database. Paste the operation_Id from Transaction search.
+union requests, dependencies, traces, exceptions
+| where operation_Id == "<operation id>"
+| project timestamp, itemType, name, duration, success,
+          relayed = tostring(customDimensions["relay.source"]), message
+| order by timestamp asc
+```
+
+Everything is kept by default: the sampling ratio is 1.0, so no Information log is dropped with an
+unsampled trace. Set `AzureMonitor__SamplingRatio` (for example `0.25`) on a busy environment; the
+workspace's daily ingestion cap is the backstop.
+
+**An existing scaffold does not get this from `aspire-addon infra adopt`**, which brings IaC forward
+and not `servicedefaults` or the API. By hand, from a scaffold made from this template, copy across:
+`src/template.servicedefaults/` (`Extensions.cs`, `SerilogExtensions.cs`,
+`OpenTelemetryLogForwarder.cs`, the csproj, and `Azure.Monitor.OpenTelemetry.AspNetCore` in
+`Directory.Packages.props`, without `Serilog.Sinks.OpenTelemetry`); the API's `Telemetry/` folder,
+`Controllers/OtlpRelayController.cs`, `Startup/OtlpRelayConfigurator.cs`, the
+`ClientTelemetryController` and `CorsConfigurator` changes and the two `Program.cs` lines; the
+`Serilog` sections of each service's `appsettings*.json`; then regenerate the contract and clients.
+For React, `src/lib/telemetry.ts` and `telemetryTarget.ts` and the two `-otlp-http` exporters; for
+Blazor, `Template.Blazor.Maui.Pages/Telemetry/`.
 
 ## The MVVM framework
 
