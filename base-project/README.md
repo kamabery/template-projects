@@ -510,8 +510,9 @@ the page load, the fetch, `GET /api/<Resources>` and the database query, under o
 
 Select a row to see its items in order. **Failures** (failed requests, exceptions), **Dependencies**
 (calls, failures, p50 and p95 by target) and **Browser logs** (`traces` under the `Browser` category)
-follow. An existing scaffold gets it with `aspire-addon infra adopt`, or by copying those two files
-and the four outputs at the end of `IaC/outputs.tf`.
+follow. `aspire-addon infra adopt` does not bring it to an existing scaffold: copy
+`IaC/workbooks/telemetry.json`, the Workbook resource at the end of `IaC/observability.tf` and the
+last four outputs in `IaC/outputs.tf` from a fresh scaffold.
 
 Everything is kept by default: the sampling ratio is 1.0, so no Information log is dropped with an
 unsampled trace. Set `AzureMonitor__SamplingRatio` (for example `0.25`) on a busy environment; the

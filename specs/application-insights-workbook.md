@@ -120,8 +120,9 @@ scaffold, which needs Kurt's yes. The factory already runs Playwright for the si
 - Alerts, availability tests and Managed Grafana. Availability tests would cost about $50 a month
   per test at preview scale.
 - Changing what the services emit. That is `azure-monitor-telemetry`, which is merged.
-- Existing scaffolds (todoapp, recipebox, telproof): they get this by `aspire-addon infra adopt` or
-  by copying the two files by hand, as the README describes.
+- Existing scaffolds (todoapp, recipebox, telproof): they get this by copying the files by hand, as the
+  README describes. `aspire-addon infra adopt` overwrites only pack-owned files, and
+  `observability.tf` and `outputs.tf` are the project's.
 - Event services and Functions panels. Event-driven telemetry comes later (Kurt, 2026-11-23).
 
 ## Tests
