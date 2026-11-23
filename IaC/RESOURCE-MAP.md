@@ -49,3 +49,7 @@ by `APPLICATIONINSIGHTS_CONNECTION_STRING`, which every container app and Functi
 the application's code is given (`tests/platform*.tftest.hcl`). The browser's telemetry reaches it through
 the API's `/api/otel` relay. Where to look - Transaction search, Failures, Performance - is in
 `base-project/README.md`, "In Azure: Application Insights".
+
+Beside it, in the same resource group, is a **Workbook**, `<project> <env> telemetry`
+(`workbooks/telemetry.json`): transactions, failures, dependencies and browser logs on one page, free.
+Its portal link is the `telemetry_workbook_url` output.

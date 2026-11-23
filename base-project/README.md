@@ -471,6 +471,7 @@ Where to look, in the portal under the environment's `appi-<project>-<env>`:
 | Traces, durations | **Performance** (operations and dependencies, slowest first) |
 | Structured logs | **Logs**: `traces` (properties under `customDimensions`), `exceptions` |
 | Metrics | **Metrics** |
+| All of the above, on one page | **Workbooks** → `<project> <env> telemetry` (the IaC output `telemetry_workbook_url`) |
 
 One user action is one `operation_Id` from the page to the database:
 
@@ -495,6 +496,22 @@ union requests, dependencies, traces, exceptions
           relayed = tostring(customDimensions["relay.source"]), message
 | order by timestamp asc
 ```
+
+**The Workbook** (`IaC/workbooks/telemetry.json`, `IaC/observability.tf`) puts that query and three
+more on one page, for a chosen time range. Load the resource page once (the IaC output
+`trace_page_path`, after the frontend URL) and it is a row under **Transactions** a few minutes later:
+the page load, the fetch, `GET /api/<Resources>` and the database query, under one `operation_Id`.
+
+| Column | True when the operation has |
+| --- | --- |
+| `hasBrowser` | a span the page relayed (`relay.source = browser`) |
+| `hasRequest` | a request to the API |
+| `hasDb` | a database dependency. Always false on SQLite, which has no database spans |
+
+Select a row to see its items in order. **Failures** (failed requests, exceptions), **Dependencies**
+(calls, failures, p50 and p95 by target) and **Browser logs** (`traces` under the `Browser` category)
+follow. An existing scaffold gets it with `aspire-addon infra adopt`, or by copying those two files
+and the four outputs at the end of `IaC/outputs.tf`.
 
 Everything is kept by default: the sampling ratio is 1.0, so no Information log is dropped with an
 unsampled trace. Set `AzureMonitor__SamplingRatio` (for example `0.25`) on a busy environment; the
