@@ -52,12 +52,19 @@
               "null",
               "string"
             ]
+          },
+          "relay": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "required": [
           "endpoint",
           "protocol",
-          "headers"
+          "headers",
+          "relay"
         ],
         "type": "object"
       },
@@ -301,7 +308,7 @@
             "description": "Not Found"
           }
         },
-        "summary": "OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard",
+        "summary": "Where a browser client sends its telemetry: the Aspire dashboard in Development, the relay in Azure",
         "tags": [
           "ClientTelemetry"
         ]

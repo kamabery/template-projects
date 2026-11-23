@@ -45,7 +45,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard */
+        /** Where a browser client sends its telemetry: the Aspire dashboard in Development, the relay in Azure */
         get: operations["GetClientTelemetryConfig"];
         put?: never;
         post?: never;
@@ -137,6 +137,7 @@ export interface components {
             endpoint: null | string;
             headers: null | string;
             protocol: null | string;
+            relay: null | string;
         };
         CurrentUser: {
             name: string;

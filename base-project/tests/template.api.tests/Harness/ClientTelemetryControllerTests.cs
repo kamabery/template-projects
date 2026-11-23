@@ -76,4 +76,40 @@ public sealed class ClientTelemetryControllerTests : IAsyncLifetime
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Config_InProductionWithApplicationInsights_NamesOnlyTheRelay()
+    {
+        // A factory preview: no dashboard to point at, so the browser posts to the API's relay,
+        // and no OTLP setting is handed out.
+        await using var production = _factory.WithWebHostBuilder(builder => builder
+            .UseEnvironment("Production")
+            .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = "InstrumentationKey=00000000-0000-0000-0000-000000000000",
+                    ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:19114",
+                })));
+
+        using var client = production.CreateClient();
+
+        var config = await client.GetFromJsonAsync<ClientTelemetryController.ClientTelemetryConfig>(
+            "/client-telemetry/config");
+
+        config.ShouldSatisfyAllConditions(
+            () => config!.Relay.ShouldBe("otel"),
+            () => config!.Endpoint.ShouldBeNull(),
+            () => config!.Headers.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task Config_WithoutApplicationInsights_NamesNoRelay()
+    {
+        using var client = _factory.CreateClient();
+
+        var config = await client.GetFromJsonAsync<ClientTelemetryController.ClientTelemetryConfig>(
+            "/client-telemetry/config");
+
+        config!.Relay.ShouldBeNull();
+    }
 }

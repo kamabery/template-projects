@@ -60,6 +60,6 @@ public static class CorsConfigurator
         return app;
     }
 
-    private static string[] ReadAllowedOrigins(IConfiguration configuration) =>
+    internal static string[] ReadAllowedOrigins(IConfiguration configuration) =>
         configuration.GetSection(AllowedOriginsKey).Get<string[]>() ?? [];
 }

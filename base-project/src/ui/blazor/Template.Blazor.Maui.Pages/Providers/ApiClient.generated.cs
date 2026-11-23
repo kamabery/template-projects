@@ -45,7 +45,7 @@ namespace Template.Blazor.Maui.Pages.Providers
         [Get("/auth/config")]
         Task<AuthConfig> GetAuthConfig(CancellationToken cancellationToken = default);
 
-        /// <summary>OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard</summary>
+        /// <summary>Where a browser client sends its telemetry: the Aspire dashboard in Development, the relay in Azure</summary>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">
@@ -127,6 +127,26 @@ namespace Template.Blazor.Maui.Pages.Providers
         [Post("/harness/reset")]
         Task<HarnessState> ResetHarness(CancellationToken cancellationToken = default);
 
+        /// <summary>Who the signed-in caller is</summary>
+        /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>401</term>
+        /// <description>Unauthorized</description>
+        /// </item>
+        /// </list>
+        /// </exception>
+        [Headers("Accept: application/json, text/json, text/plain")]
+        [Get("/me")]
+        Task<CurrentUser> GetCurrentUser(CancellationToken cancellationToken = default);
+
     }
 
 
@@ -190,6 +210,19 @@ namespace Template.Blazor.Maui.Pages.Providers
 
         [JsonPropertyName("protocol")]
         public string Protocol { get; set; }
+
+        [JsonPropertyName("relay")]
+        public string Relay { get; set; }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class CurrentUser
+    {
+
+        [JsonPropertyName("name")]
+        [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
+        public string Name { get; set; }
 
     }
 
