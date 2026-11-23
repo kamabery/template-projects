@@ -117,6 +117,13 @@ deployed it runs on Flex Consumption and scales with the queue - see `IaC/functi
 service publishes and never listens on that queue: a listener there would compete with the Function
 for messages, which `ServiceBusTransportTests` exists to catch.
 
+In Azure, each `widget-completed` delivery shows up **twice** in Application Insights: once from the
+Functions host's own records (`site_config.application_insights_connection_string` in
+`IaC/functions.tf`) and once from the worker, which calls `AddServiceDefaults` like every other
+service and so exports through the Azure Monitor distro too. That is known and left as it is: the
+alternative, `Microsoft.Azure.Functions.Worker.OpenTelemetry`, is another package for a cosmetic gain.
+Filter on `cloud_RoleName` or `sdkVersion` when you count.
+
 `WidgetsController` is linked in rather than referenced, so it compiles into each host and
 `AddControllers()` finds it by its normal entry-assembly scan — no `AddApplicationPart` required.
 

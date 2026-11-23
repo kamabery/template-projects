@@ -67,3 +67,26 @@ run "the_events_app_cannot_collide_on_the_platform" {
     error_message = "Container app names are unique within an environment, so a preview's carry its id."
   }
 }
+# Every service that runs the application's code exports through servicedefaults, so every one needs the
+# connection string - not only the API.
+run "the_events_services_get_the_application_insights_connection_string" {
+  command = plan
+
+  # A known value, so the Function app's setting can be compared at plan time.
+  override_resource {
+    target          = azurerm_application_insights.main
+    override_during = plan
+    values = {
+      connection_string = "InstrumentationKey=00000000-0000-0000-0000-000000000000"
+    }
+  }
+
+  assert {
+    condition     = contains([for env in azurerm_container_app.events.template[0].container[0].env : env.name], "APPLICATIONINSIGHTS_CONNECTION_STRING")
+    error_message = "The events service exports to Application Insights only when APPLICATIONINSIGHTS_CONNECTION_STRING is set."
+  }
+  assert {
+    condition     = azurerm_function_app_flex_consumption.consumer.site_config[0].application_insights_connection_string == azurerm_application_insights.main.connection_string
+    error_message = "The Function app must report to the same Application Insights as the services it serves."
+  }
+}

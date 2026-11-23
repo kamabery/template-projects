@@ -1,5 +1,7 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -20,12 +22,12 @@ public static class Extensions
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
-        builder.ConfigureOpenTelemetry();
-
-        // After ConfigureOpenTelemetry, never before: ConfigureSerilog clears the logging providers,
-        // and the one it is there to remove is the OpenTelemetry provider registered above. See
-        // SerilogExtensions.cs.
+        // Before ConfigureOpenTelemetry, never after: ConfigureSerilog clears the default logging
+        // providers, and the OpenTelemetry provider registered next must survive it - Serilog forwards
+        // every event to it, and it is the one way out. See SerilogExtensions.cs.
         builder.ConfigureSerilog();
+
+        builder.ConfigureOpenTelemetry();
 
         builder.AddDefaultHealthChecks();
 
@@ -92,12 +94,20 @@ public static class Extensions
             builder.Services.AddOpenTelemetry().UseOtlpExporter();
         }
 
-        // Uncomment the following lines to enable the Azure Monitor exporter (requires the Azure.Monitor.OpenTelemetry.AspNetCore package)
-        //if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
-        //{
-        //    builder.Services.AddOpenTelemetry()
-        //       .UseAzureMonitor();
-        //}
+        // In Azure: traces, metrics and logs to Application Insights. Beside OTLP, not instead of it -
+        // both are on when both are configured.
+        if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+        {
+            builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+            {
+                // Keep everything by default: the distro's rate-limited sampling takes precedence over
+                // the ratio, and logs follow their trace's sampling decision, so it would drop
+                // Information logs along with unsampled requests. AzureMonitor:SamplingRatio lowers it
+                // for a busy environment; the workspace's daily cap is the backstop.
+                options.TracesPerSecond = null;
+                options.SamplingRatio = builder.Configuration.GetValue("AzureMonitor:SamplingRatio", 1.0F);
+            });
+        }
 
         return builder;
     }

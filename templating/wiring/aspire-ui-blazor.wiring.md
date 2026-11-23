@@ -97,8 +97,10 @@ never runs.
 The MAUI host reads its OTLP settings from the environment the AppHost starts it with. The
 WebAssembly host cannot — a browser has no environment, and `wwwroot/appsettings.json` is a static
 file that cannot carry the dashboard's per-run API key — so it fetches them from the API at
-`GET /client-telemetry/config`, which `aspire-base` already ships (Development only). That endpoint
-is why the `api` resource carries `WithOtlpExporter(OtlpProtocol.HttpProtobuf)`: a browser cannot
+`GET /client-telemetry/config`, which `aspire-base` already ships. In Azure the same call names the
+API's `/api/otel` relay instead, and the host sends OTLP/JSON there; see the base README, "In Azure:
+Application Insights". Under the AppHost, that endpoint is why the `api` resource carries
+`WithOtlpExporter(OtlpProtocol.HttpProtobuf)`: a browser cannot
 speak gRPC, so the endpoint the API hands out has to be one it can post to. Leave that call in place
 if you want RUM from the WebAssembly host.
 

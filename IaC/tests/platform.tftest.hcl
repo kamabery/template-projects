@@ -175,3 +175,15 @@ run "another_region_is_a_full_stack" {
     error_message = "A preview in another region cannot use the platform's environment."
   }
 }
+
+# The API exports its traces, metrics and logs to Application Insights itself (servicedefaults'
+# UseAzureMonitor), and only when it is given the connection string. Nothing in the environment
+# forwards telemetry for it.
+run "the_api_gets_the_application_insights_connection_string" {
+  command = plan
+
+  assert {
+    condition     = contains([for env in azurerm_container_app.api.template[0].container[0].env : env.name], "APPLICATIONINSIGHTS_CONNECTION_STRING")
+    error_message = "The API exports to Application Insights only when APPLICATIONINSIGHTS_CONNECTION_STRING is set; without it the environment is blind."
+  }
+}

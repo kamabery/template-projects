@@ -238,9 +238,11 @@
       "target": "./",
       "modifiers": [
         {
-          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local - so copying it byte for byte costs nothing. stage.ps1 enforces that no other .tf file contains the token.",
+          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local - so copying it byte for byte costs nothing. stage.ps1 enforces that no other .tf file contains the token. tests/platform.tftest.hcl asserts on that block too (azurerm_container_app.api.<block>[0]) and needs no substitution either. OpenTelemetryLogForwarder.cs reads Serilog's LogEvent.Message<token> property, which the prose guard in stage.ps1 cannot tell from a project name, and it names no project.",
           "copyOnly": [
-            "IaC/containerapp.api.tf"
+            "IaC/containerapp.api.tf",
+            "IaC/tests/platform.tftest.hcl",
+            "src/template.servicedefaults/OpenTelemetryLogForwarder.cs"
           ]
         },
         {

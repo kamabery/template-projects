@@ -32,6 +32,9 @@ builder.ConfigureAuthBuilder();
 // providers are wired and why the connection string arrives rather than being configured here.
 builder.ConfigurePersistenceBuilder();
 
+// The browser telemetry relay at /api/otel and its rate limit - see OtlpRelayController.
+builder.ConfigureOtlpRelayBuilder();
+
 // Singleton on purpose: the point of an injected fault is that it persists across requests, so a
 // developer can arm one and then trigger it from the UI.
 builder.Services.AddSingleton<HarnessFaultInjector>();
@@ -69,6 +72,10 @@ app.UseSwaggerUI(options =>
 // Android emulator's 10.0.2.2 loopback, both of which talk to this over plain HTTP in development.
 app.WarnOnMissingCorsOrigins();
 app.UseCors(CorsConfigurator.WasmClientPolicy);
+
+// After routing, so the relay's [EnableRateLimiting] policy is found; after CORS, so a refused
+// request still carries the headers the WebAssembly host needs to read it.
+app.UseRateLimiter();
 
 app.LogAuthMode();
 app.UseAuthentication();

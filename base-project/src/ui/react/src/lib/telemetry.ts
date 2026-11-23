@@ -1,11 +1,9 @@
 /**
- * Browser RUM (real user monitoring) wired to the Aspire dashboard.
- *
- * The AppHost injects `OTEL_*` variables into the Vite process
- * (`WithOtlpExporter(OtlpProtocol.HttpProtobuf)` in .aspire/apphost.cs)
- * and vite.config.ts widens `envPrefix` so they reach the bundle. Without an
- * endpoint — `npm run dev` outside Aspire, or a production build — every call
- * here is a no-op and no OTel code paths run.
+ * Browser RUM (real user monitoring), to the Aspire dashboard under the
+ * AppHost and to Application Insights, through the API's /api/otel relay, in
+ * Azure. Which one, if either, is decided in telemetryTarget.ts; with neither -
+ * `npm run dev` outside Aspire, or an API with no Application Insights - every
+ * call here is a no-op and no OTel code paths run.
  *
  * What gets collected:
  *   - document load spans (navigation + resource timings)
@@ -17,8 +15,6 @@
 
 import { logs } from '@opentelemetry/api-logs'
 import { ZoneContextManager } from '@opentelemetry/context-zone'
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
 import { DocumentLoadInstrumentation } from '@opentelemetry/instrumentation-document-load'
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch'
@@ -27,35 +23,13 @@ import { resourceFromAttributes } from '@opentelemetry/resources'
 import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs'
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web'
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
-
-/**
- * `OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_RESOURCE_ATTRIBUTES` both arrive in
- * the W3C Baggage shape the OTel spec defines — `key1=value1,key2=value2`,
- * percent-encoded values. The dashboard uses the former to pass
- * `x-otlp-api-key`.
- */
-function parseKeyValueList(raw: string | undefined): Record<string, string> {
-  if (!raw) return {}
-
-  return Object.fromEntries(
-    raw
-      .split(',')
-      .map((pair) => {
-        const separator = pair.indexOf('=')
-        if (separator < 0) return null
-        return [
-          pair.slice(0, separator).trim(),
-          decodeURIComponent(pair.slice(separator + 1).trim()),
-        ] as const
-      })
-      .filter((entry) => entry !== null),
-  )
-}
-
-/** Joins the base OTLP endpoint with a signal path, tolerating a trailing slash. */
-function signalUrl(endpoint: string, signal: 'traces' | 'logs'): string {
-  return `${endpoint.replace(/\/+$/, '')}/v1/${signal}`
-}
+import {
+  type TelemetryTarget,
+  createExporters,
+  dashboardTarget,
+  parseKeyValueList,
+  resolveTelemetryTarget,
+} from '@/lib/telemetryTarget'
 
 function installErrorLogging(): void {
   const logger = logs.getLogger('browser')
@@ -91,19 +65,13 @@ function installErrorLogging(): void {
   }
 }
 
-/**
- * Starts RUM. Safe to call unconditionally — returns immediately when the
- * AppHost has not supplied an OTLP endpoint.
- */
-export function startTelemetry(): void {
-  const endpoint = import.meta.env.OTEL_EXPORTER_OTLP_ENDPOINT
-  if (!endpoint) return
-
-  const headers = parseKeyValueList(import.meta.env.OTEL_EXPORTER_OTLP_HEADERS)
+function start(target: TelemetryTarget): void {
+  const { traceExporter, logExporter } = createExporters(target)
 
   const resource = resourceFromAttributes({
     // service.instance.id and friends, so the dashboard files browser
     // telemetry under the same "ui" resource as the Vite process itself.
+    // Absent in Azure, where the relay files it under the API's resource.
     ...parseKeyValueList(import.meta.env.OTEL_RESOURCE_ATTRIBUTES),
     [ATTR_SERVICE_NAME]: import.meta.env.OTEL_SERVICE_NAME ?? 'ui',
   })
@@ -111,12 +79,7 @@ export function startTelemetry(): void {
   const tracerProvider = new WebTracerProvider({
     resource,
     spanProcessors: [
-      new BatchSpanProcessor(
-        new OTLPTraceExporter({ url: signalUrl(endpoint, 'traces'), headers }),
-        // Short delay so spans show up in the dashboard while you are still
-        // looking at the page that produced them.
-        { scheduledDelayMillis: 1000 },
-      ),
+      new BatchSpanProcessor(traceExporter, { scheduledDelayMillis: target.scheduledDelayMillis }),
     ],
   })
 
@@ -129,8 +92,8 @@ export function startTelemetry(): void {
     processors: [
       // Unlike BatchSpanProcessor, this one takes the exporter inside its options.
       new BatchLogRecordProcessor({
-        exporter: new OTLPLogExporter({ url: signalUrl(endpoint, 'logs'), headers }),
-        scheduledDelayMillis: 1000,
+        exporter: logExporter,
+        scheduledDelayMillis: target.scheduledDelayMillis,
       }),
     ],
   })
@@ -142,12 +105,13 @@ export function startTelemetry(): void {
     instrumentations: [
       new DocumentLoadInstrumentation(),
       new FetchInstrumentation({
-        // The API is reached through the Vite proxy at /api, so requests are
+        // The API is reached at /api - through the Vite proxy in development,
+        // the Static Web App's linked backend in Azure - so requests are
         // same-origin and `traceparent` is injected without a CORS preflight.
         // Add absolute API origins here if you ever bypass the proxy.
         propagateTraceHeaderCorsUrls: [],
-        // Don't trace the exporter's own uploads.
-        ignoreUrls: [new RegExp(`^${endpoint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)],
+        // Don't trace the exporters' own uploads.
+        ignoreUrls: [new RegExp(target.exportUrlPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))],
         ignoreNetworkEvents: true,
       }),
       new UserInteractionInstrumentation(),
@@ -160,5 +124,22 @@ export function startTelemetry(): void {
   window.addEventListener('pagehide', () => {
     void tracerProvider.forceFlush()
     void loggerProvider.forceFlush()
+  })
+}
+
+/**
+ * Starts RUM. Safe to call unconditionally. Under the AppHost it starts at
+ * once; otherwise it asks the API whether there is a relay first, and starts
+ * only if there is.
+ */
+export function startTelemetry(): void {
+  const dashboard = dashboardTarget(import.meta.env)
+  if (dashboard) {
+    start(dashboard)
+    return
+  }
+
+  void resolveTelemetryTarget(import.meta.env).then((target) => {
+    if (target) start(target)
   })
 }

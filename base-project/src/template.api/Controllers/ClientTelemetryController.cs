@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace template.api.Controllers;
 
 /// <summary>
-/// Development-only relay that hands a browser client the OTLP settings the AppHost gave this API.
+/// Tells a browser client where its telemetry goes: in Development, the OTLP settings the AppHost
+/// gave this API; in Azure, the path of this API's own relay (<see cref="OtlpRelayController"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,22 +34,33 @@ public sealed class ClientTelemetryController(IConfiguration configuration, IHos
     /// <param name="Protocol">The OTEL_EXPORTER_OTLP_PROTOCOL value. A browser can only use
     /// <c>http/protobuf</c>; the client checks this rather than assuming.</param>
     /// <param name="Headers">W3C Baggage form, carrying the dashboard's x-otlp-api-key.</param>
+    /// <param name="Relay">The browser telemetry relay's path, relative to this API's base address
+    /// (<c>otel</c>, so <c>otel/v1/traces</c> and <c>otel/v1/logs</c>), or null when Application
+    /// Insights is not configured. A client uses it when there is no Endpoint.</param>
     /// <remarks>
     /// OTEL_RESOURCE_ATTRIBUTES is deliberately not relayed: it carries this API's own
     /// service.instance.id, and a client that adopted it would file its telemetry under the API's
     /// resource in the dashboard rather than its own.
     /// </remarks>
-    public record ClientTelemetryConfig(string? Endpoint, string? Protocol, string? Headers);
+    public record ClientTelemetryConfig(string? Endpoint, string? Protocol, string? Headers, string? Relay);
 
     [HttpGet("config", Name = "GetClientTelemetryConfig")]
-    [EndpointSummary("OTLP settings for a browser client, so it can export telemetry to the Aspire dashboard")]
+    [EndpointSummary("Where a browser client sends its telemetry: the Aspire dashboard in Development, the relay in Azure")]
     [ProducesResponseType<ClientTelemetryConfig>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<ClientTelemetryConfig> GetConfig()
     {
+        // Run time, not build time: a factory preview gets its connection string when it is
+        // deployed, so no build variable could say whether the relay is there.
+        var relay = string.IsNullOrWhiteSpace(configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"])
+            ? null
+            : RelayPath;
+
         if (!environment.IsDevelopment())
         {
-            return NotFound();
+            // Outside Development only the relay is named: the OTLP settings carry the dashboard's
+            // key and must not leave a development machine.
+            return relay is null ? NotFound() : Ok(new ClientTelemetryConfig(null, null, null, relay));
         }
 
         // Null all the way through when the API is running standalone, which is what leaves the
@@ -56,6 +68,10 @@ public sealed class ClientTelemetryController(IConfiguration configuration, IHos
         return Ok(new ClientTelemetryConfig(
             configuration["OTEL_EXPORTER_OTLP_ENDPOINT"],
             configuration["OTEL_EXPORTER_OTLP_PROTOCOL"],
-            configuration["OTEL_EXPORTER_OTLP_HEADERS"]));
+            configuration["OTEL_EXPORTER_OTLP_HEADERS"],
+            relay));
     }
+
+    /// <summary>OtlpRelayController's route, relative to the API base.</summary>
+    private const string RelayPath = "otel";
 }
