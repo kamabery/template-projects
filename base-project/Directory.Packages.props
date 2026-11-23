@@ -92,6 +92,9 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+    <!-- The Azure path: UseAzureMonitor() when APPLICATIONINSIGHTS_CONNECTION_STRING is set, beside
+         OTLP. See specs/azure-monitor-telemetry.md, Q1. -->
+    <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
   </ItemGroup>
 
   <ItemGroup Label="Client-side OpenTelemetry - the Blazor hosts build their providers by hand">
@@ -109,7 +112,6 @@
          (the AddSerilog overload used here), Serilog.Settings.Configuration (ReadFrom.Configuration)
          and Serilog.Sinks.Console. Two pins instead of five. -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
   </ItemGroup>
 
   <!-- Pin notes - these three are load-bearing, not laziness:

@@ -173,7 +173,7 @@ src/
   template.api.migrations.sqlserver/  EF migrations, SQL Server only
   template.api.migrations.sqlite/     EF migrations, SQLite only
   template.servicedefaults/    stock Aspire shared project (OTel, health, resilience) +
-                               SerilogExtensions.cs, which makes Serilog the logging provider
+                               SerilogExtensions.cs, which makes Serilog the logging front door
   ui/
     react/                     Vite + React front end, launched by the AppHost.
                                src/components/ui/ is the design system; src/routes/styleguide.tsx
@@ -533,25 +533,39 @@ request still reaches the controller and still returns 200 — it is only missin
 `Access-Control-Allow-Origin` header, which the browser enforces on the client. That asymmetry is
 expensive to diagnose, so `WarnOnMissingCorsOrigins` says it at startup instead.
 
-### Logging — Serilog, configured once
+### Logging — Serilog in front, OpenTelemetry out
 
-`AddServiceDefaults()` makes Serilog the logging provider for every service, wired in
-`src/template.servicedefaults/SerilogExtensions.cs`. Two sinks: the console, and — whenever the
-AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT` — the dashboard over OTLP. Outside the AppHost the
-OTLP sink is not added at all, which is the same gate `AddOpenTelemetryExporters` already applies.
+`AddServiceDefaults()` makes Serilog the front door for logging in every service, wired in
+`src/template.servicedefaults/SerilogExtensions.cs`. Two sinks: the console, and
+`OpenTelemetryLogForwarder`, which hands every event to the OpenTelemetry logging provider. That
+provider is the one way out, and its exporters decide where a record goes: the dashboard over OTLP
+whenever the AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT`, Application Insights through
+`UseAzureMonitor()` whenever `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, both, or nowhere
+(`specs/azure-monitor-telemetry.md`, L1-L7).
 
-Three things worth knowing before changing it:
+Things worth knowing before changing it:
 
 - **Serilog does not read `Logging:LogLevel`.** Levels live under `Serilog:MinimumLevel` in each
   service's `appsettings.json`; the old sections were replaced rather than left to rot. A missing
   section is a no-op, not an error. The AppHost keeps its own `Logging` section — it is not a
-  service and does not get Serilog.
-- **Serilog owns the pipeline, not a provider slot.** `AddSerilog` replaces `ILoggerFactory`, and its
-  `writeToProviders` parameter defaults to false, so no `ILoggerProvider` is ever written to. That is
-  what stops the OpenTelemetry logging provider from exporting the same record a second time.
-  `ConfigureSerilog` also calls `ClearProviders()` so the removal is explicit rather than a
-  provider that looks live and is not — which is why it must run *after* `ConfigureOpenTelemetry`.
-  `LoggingConfigurationTests` in the API suite asserts both halves.
+  service and does not get Serilog. App code logs at Information; `Microsoft`, `System` and the
+  events hosts' Marten / Polecat / Fisher / Wolverine at Warning, with `Microsoft.Hosting.Lifetime`
+  kept at Information. EF Core's per-command SQL logs are dropped on purpose: the database
+  dependency span already records each query.
+- **Not `writeToProviders: true`.** That bridge passes the Serilog `LogEvent` itself as the log
+  state, which the OpenTelemetry provider cannot read, so every property would be lost.
+  `OpenTelemetryLogForwarder` passes the key/value list the provider expects instead: template
+  properties and `LogContext` enrichments become attributes (`customDimensions` in Application
+  Insights), nested values (`{@Order}`, sequences) become one JSON string each, and the record
+  carries the current Activity's trace id.
+- **`ConfigureSerilog` runs before `ConfigureOpenTelemetry`.** Its `ClearProviders()` removes the
+  host's default Console, Debug and EventSource providers, which the forwarder would otherwise
+  write every event to as well; the OpenTelemetry provider is registered after it and survives.
+  `LoggingConfigurationTests` in the API suite asserts exactly one provider, and that a record
+  reaches it with its properties, its trace id and the right levels.
+- **The console keeps Warning and above in Production.** The Container Apps environment already
+  copies console output into the Log Analytics workspace Application Insights writes to, so an
+  Information line on both would be stored twice. `ConsoleLevelTests` covers it.
 - **`UseSerilogRequestLogging` is deliberately absent.** `AddAspNetCoreInstrumentation` already
   records every request as a span, and `Microsoft.AspNetCore` is pinned at `Warning`.
 
@@ -1150,9 +1164,12 @@ future session doesn't have to re-read it:
 - Don't edit `src/ui/react/src/routeTree.gen.ts` — it is regenerated on save. Adding a route file
   and then running `tsc` first will fail until the Vite plugin has regenerated it; run
   `npx vite build` (or `npm run dev`) once, then typecheck.
-- Don't call `ConfigureSerilog()` before `ConfigureOpenTelemetry()` in `AddServiceDefaults`. The
-  `ClearProviders()` in it exists to remove the OpenTelemetry logging provider the other one
-  registers; reversed, that provider is left registered and looks live when it is not.
+- Don't call `ConfigureSerilog()` after `ConfigureOpenTelemetry()` in `AddServiceDefaults`. Its
+  `ClearProviders()` would remove the OpenTelemetry logging provider, the only way logs leave a
+  service, and nothing would fail: the console would still look fine.
+- Don't switch `AddSerilog` to `writeToProviders: true` in place of `OpenTelemetryLogForwarder`.
+  The OpenTelemetry provider cannot read the state that bridge passes, so logs would still arrive,
+  stripped of every property.
 - Don't reintroduce a `Logging:LogLevel` section for `template.api` or `template.events`. Serilog
   does not read it, so it would be configuration that silently does nothing.
 - Don't let the Blazor telemetry build its OTLP exporters with the SDK's default `HttpClient`, and
@@ -1279,9 +1296,10 @@ future session doesn't have to re-read it:
   `WidgetCompletedV1Wire.Read`. Wolverine writes camelCase, and default options deserialize every
   field of a real message to its default value without throwing.
 - Don't add `Microsoft.Azure.Functions.Worker.ApplicationInsights` to the Functions project.
-  `AddServiceDefaults()` makes Serilog own the logger factory, so that package's logger provider is
-  never written to - wiring that looks live and is not. The Functions host records invocations in
-  Application Insights on its own.
+  `AddServiceDefaults()` already ships the worker's logs and traces through the Azure Monitor
+  distro, and `OpenTelemetryLogForwarder` would write every event to that package's provider as
+  well - a second copy of each. The Functions host records invocations in Application Insights on
+  its own, beside the worker; those duplicates are known and accepted (spec R7).
 - Don't register `Widget` as a projection. It is live-aggregated from its stream, which is
   what `FetchForWriting<Widget>` needs; `WidgetSummary` is the registered read model.
 - Don't reference anything in `event-project/` from `base-project/`. The dependency runs one way
