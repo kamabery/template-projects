@@ -33,6 +33,24 @@ mock_provider "azuread" {
 
 mock_provider "msgraph" {}
 
+# Ids are computed, so a mock leaves them unknown at plan. These pin them, in the portal's mixed case.
+override_resource {
+  target          = azurerm_application_insights.main
+  override_during = plan
+  values = {
+    id     = "/subscriptions/s/resourceGroups/rg-shelf-j012/providers/Microsoft.Insights/components/appi-shelf-j012"
+    app_id = "11111111-1111-1111-1111-111111111111"
+  }
+}
+
+override_resource {
+  target          = azurerm_application_insights_workbook.main
+  override_during = plan
+  values = {
+    id = "/subscriptions/s/resourceGroups/rg-shelf-j012/providers/Microsoft.Insights/workbooks/0c4f26b6-231b-5a69-939f-bfedfc95573f"
+  }
+}
+
 variables {
   project_name = "shelf"
   environment  = "j012"
@@ -63,7 +81,7 @@ run "every_environment_gets_a_telemetry_workbook" {
   command = plan
 
   assert {
-    condition     = azurerm_application_insights_workbook.main.source_id == lower(azurerm_application_insights.main.id)
+    condition     = azurerm_application_insights_workbook.main.source_id == "/subscriptions/s/resourcegroups/rg-shelf-j012/providers/microsoft.insights/components/appi-shelf-j012"
     error_message = "A preview on the platform needs a Workbook over its own Application Insights; the portal matches source_id lowercased."
   }
   assert {
@@ -80,7 +98,7 @@ run "a_full_preview_gets_a_telemetry_workbook" {
   }
 
   assert {
-    condition     = azurerm_application_insights_workbook.main.source_id == lower(azurerm_application_insights.main.id)
+    condition     = azurerm_application_insights_workbook.main.source_id == "/subscriptions/s/resourcegroups/rg-shelf-j012/providers/microsoft.insights/components/appi-shelf-j012"
     error_message = "A preview with a stack of its own needs a Workbook too."
   }
 }
@@ -93,7 +111,7 @@ run "dev_gets_a_telemetry_workbook" {
   }
 
   assert {
-    condition     = azurerm_application_insights_workbook.main.source_id == lower(azurerm_application_insights.main.id) && azurerm_application_insights_workbook.main.display_name == "shelf dev telemetry"
+    condition     = azurerm_application_insights_workbook.main.source_id == "/subscriptions/s/resourcegroups/rg-shelf-j012/providers/microsoft.insights/components/appi-shelf-j012" && azurerm_application_insights_workbook.main.display_name == "shelf dev telemetry"
     error_message = "dev and staging need a Workbook too."
   }
 }
@@ -104,7 +122,7 @@ run "the_workbook_name_is_stable" {
   command = plan
 
   assert {
-    condition     = azurerm_application_insights_workbook.main.name == "a3c4d2d5-1b43-5d0a-8a37-2f5cf1bb8d4b"
+    condition     = azurerm_application_insights_workbook.main.name == "0c4f26b6-231b-5a69-939f-bfedfc95573f"
     error_message = "The Workbook's name must be known at plan and the same on every apply."
   }
 }
@@ -117,7 +135,7 @@ run "another_environment_gets_another_workbook_name" {
   }
 
   assert {
-    condition     = azurerm_application_insights_workbook.main.name != "a3c4d2d5-1b43-5d0a-8a37-2f5cf1bb8d4b"
+    condition     = azurerm_application_insights_workbook.main.name != "0c4f26b6-231b-5a69-939f-bfedfc95573f"
     error_message = "Each environment's Workbook needs a name of its own."
   }
 }

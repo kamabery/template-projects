@@ -26,3 +26,18 @@ resource "azurerm_application_insights" "main" {
   application_type    = "web"
   tags                = local.tags
 }
+
+# The Aspire dashboard's nearest twin in Azure: recent transactions (browser span, API request and
+# database call under one operation_Id), failures, dependencies and browser logs, all KQL over the
+# Application Insights above. Free. Its name is the UUID the portal requires, derived from the
+# resource group so it is known at plan and the same on every apply (tests/telemetry.tftest.hcl).
+resource "azurerm_application_insights_workbook" "main" {
+  name                = uuidv5("url", "${local.resource_group_name}/telemetry-workbook")
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  display_name        = "${local.base_name} ${var.environment} telemetry"
+  source_id           = lower(azurerm_application_insights.main.id)
+  category            = "workbook"
+  data_json           = file("${path.module}/workbooks/telemetry.json")
+  tags                = local.tags
+}
