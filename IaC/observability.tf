@@ -1,8 +1,11 @@
 # The Aspire dashboard has no Azure equivalent, and this is the closest thing: the services already
 # emit OpenTelemetry through AddServiceDefaults, and Application Insights ingests it unchanged.
-# Nothing in the application changes - the connection string arrives as an environment variable and
-# the Azure Monitor exporter is not needed for traces to land, because the Container Apps
-# environment forwards them.
+# The services export it themselves: servicedefaults turns on the Azure Monitor exporter when
+# APPLICATIONINSIGHTS_CONNECTION_STRING is set, so every container app and the Function app that
+# runs template code is given it (tests/platform*.tftest.hcl hold that). The Container Apps
+# environment forwards nothing - no OpenTelemetry agent is configured on it, here or on the
+# factory's shared platform - so a service without the connection string sends no telemetry at all.
+# The browser's spans and logs arrive through the API's /api/otel relay, under the API's name.
 
 resource "azurerm_log_analytics_workspace" "main" {
   count = local.on_platform ? 0 : 1
