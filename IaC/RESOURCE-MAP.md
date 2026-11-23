@@ -46,6 +46,6 @@ The Aspire dashboard's twin is **Application Insights** (`observability.tf`), on
 a preview's dying with it. It is not an AppHost call, so it has no row above: every environment gets
 it. The services export to it themselves through servicedefaults' Azure Monitor exporter, switched on
 by `APPLICATIONINSIGHTS_CONNECTION_STRING`, which every container app and Function app running
-template code is given (`tests/platform*.tftest.hcl`). The browser's telemetry reaches it through
+the application's code is given (`tests/platform*.tftest.hcl`). The browser's telemetry reaches it through
 the API's `/api/otel` relay. Where to look - Transaction search, Failures, Performance - is in
 `base-project/README.md`, "In Azure: Application Insights".

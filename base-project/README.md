@@ -411,7 +411,7 @@ to the console, and hands every event to the OpenTelemetry logging provider
 (`OpenTelemetryLogForwarder`). That provider is the one way out: to the Aspire dashboard whenever the
 AppHost supplies `OTEL_EXPORTER_OTLP_ENDPOINT`, to Application Insights whenever
 `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (see "In Azure" below), to both, or to nowhere when a
-service runs on its own. Template properties and `LogContext` enrichments arrive as attributes, and
+service runs on its own. Message properties and `LogContext` enrichments arrive as attributes, and
 each record carries its request's trace id.
 
 Levels live under `Serilog:MinimumLevel` in each service's `appsettings.json`. **Serilog does not
@@ -459,7 +459,7 @@ Every deployed environment — dev, staging, a factory preview — has its own A
 (`IaC/observability.tf`), and it is the Aspire dashboard's twin. The services send to it themselves:
 `AddServiceDefaults` turns on the Azure Monitor OpenTelemetry exporter (`UseAzureMonitor()`)
 whenever `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, which the IaC does for every container app
-and the Function app that runs template code. Nothing in the Container Apps environment forwards
+and the Function app that runs the application's code. Nothing in the Container Apps environment forwards
 telemetry, so a service without that setting is invisible.
 
 Where to look, in the portal under the environment's `appi-<project>-<env>`:
@@ -501,7 +501,7 @@ unsampled trace. Set `AzureMonitor__SamplingRatio` (for example `0.25`) on a bus
 workspace's daily ingestion cap is the backstop.
 
 **An existing scaffold does not get this from `aspire-addon infra adopt`**, which brings IaC forward
-and not `servicedefaults` or the API. By hand, from a scaffold made from this template, copy across:
+and not `servicedefaults` or the API. By hand, from a fresh scaffold of the same add-ons, copy across:
 `src/template.servicedefaults/` (`Extensions.cs`, `SerilogExtensions.cs`,
 `OpenTelemetryLogForwarder.cs`, the csproj, and `Azure.Monitor.OpenTelemetry.AspNetCore` in
 `Directory.Packages.props`, without `Serilog.Sinks.OpenTelemetry`); the API's `Telemetry/` folder,

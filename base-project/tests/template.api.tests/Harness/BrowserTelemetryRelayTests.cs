@@ -137,7 +137,7 @@ public sealed class BrowserTelemetryRelayTests : IDisposable
             () => log.Category.ShouldBe(BrowserTelemetryRelay.LogCategory),
             () => log.Level.ShouldBe(LogLevel.Error),
             () => log.TraceId.ShouldBe(TraceId),
-            // Braces in a browser message are text, not a template hole.
+            // Braces in a browser message are text, not a placeholder.
             () => log.Attributes[BrowserTelemetryRelay.MessageAttribute].ShouldBe("Widget {id} failed"),
             () => log.Attributes["exception.type"].ShouldBe("TypeError"),
             () => log.Attributes[BrowserTelemetryRelay.SourceAttribute].ShouldBe(BrowserTelemetryRelay.SourceValue));

@@ -501,7 +501,7 @@ $packVersion = ([xml](Get-Content -Raw (Join-Path $RepoRoot 'packaging/AspireSta
 
 "@)
 
-Assert-ProseSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf')
+Assert-ProseSubstitutionSafe -Root $base -CopyOnly @('IaC/containerapp.api.tf', 'src/template.servicedefaults/OpenTelemetryLogForwarder.cs')
 Write-Host "aspire-base       $n files"
 
 # --- aspire-ui-react ------------------------------------------------------------------------------

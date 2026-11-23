@@ -67,7 +67,7 @@ run "the_events_app_cannot_collide_on_the_platform" {
     error_message = "Container app names are unique within an environment, so a preview's carry its id."
   }
 }
-# Every service that runs template code exports through servicedefaults, so every one needs the
+# Every service that runs the application's code exports through servicedefaults, so every one needs the
 # connection string - not only the API.
 run "the_events_services_get_the_application_insights_connection_string" {
   command = plan

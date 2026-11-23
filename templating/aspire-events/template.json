@@ -79,9 +79,10 @@
       "target": "./",
       "modifiers": [
         {
-          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local. servicebus.tf carries no such block and is substituted normally.",
+          "//": "azurerm_container_app declares a block whose name is exactly this template's sourceName, so substitution would rename it and the configuration would stop parsing. The file needs no substitution of its own - every name in it comes from a Terraform local. servicebus.tf carries no such block and is substituted normally. tests/platform.events.tftest.hcl asserts on the events app's block and is copied as is for the same reason.",
           "copyOnly": [
-            "IaC/containerapp.events.tf"
+            "IaC/containerapp.events.tf",
+            "IaC/tests/platform.events.tftest.hcl"
           ]
         },
         {

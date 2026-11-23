@@ -2,7 +2,7 @@
 # emit OpenTelemetry through AddServiceDefaults, and Application Insights ingests it unchanged.
 # The services export it themselves: servicedefaults turns on the Azure Monitor exporter when
 # APPLICATIONINSIGHTS_CONNECTION_STRING is set, so every container app and the Function app that
-# runs template code is given it (tests/platform*.tftest.hcl hold that). The Container Apps
+# runs the application's code is given it (tests/platform*.tftest.hcl hold that). The Container Apps
 # environment forwards nothing - no OpenTelemetry agent is configured on it, here or on the
 # factory's shared platform - so a service without the connection string sends no telemetry at all.
 # The browser's spans and logs arrive through the API's /api/otel relay, under the API's name.

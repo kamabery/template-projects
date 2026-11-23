@@ -16,7 +16,7 @@ namespace Microsoft.Extensions.Hosting;
 /// <para>
 /// Not <c>AddSerilog(writeToProviders: true)</c>: that bridge passes the Serilog <c>LogEvent</c>
 /// itself as the log state, which the OpenTelemetry provider cannot read, so every property would
-/// be lost. Here the state is the key/value list the provider expects, so template properties and
+/// be lost. Here the state is the key/value list the provider expects, so named properties and
 /// <c>LogContext</c> enrichments become attributes - <c>customDimensions</c> in Application Insights.
 /// </para>
 /// <para>

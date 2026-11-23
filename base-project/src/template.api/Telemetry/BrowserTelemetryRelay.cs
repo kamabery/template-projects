@@ -31,7 +31,7 @@ public sealed class BrowserTelemetryRelay(string activitySourceName, ILoggerFact
     public const string SourceValue = "browser";
 
     /// <summary>The property a relayed log's text is kept in. The text is a value, never a message
-    /// template, so braces a browser logged stay as they were.</summary>
+    /// format, so braces a browser logged stay as they were.</summary>
     public const string MessageAttribute = "BrowserMessage";
 
     private const string OriginalFormat = "{OriginalFormat}";
