@@ -1,6 +1,8 @@
 # Azure Monitor telemetry: what a scaffold emits reaches Application Insights
 
-**Status:** decided, not started. Written 2026-11-23; Kurt answered the open questions the same day (see Decisions).
+**Status:** decided, not started. Written 2026-11-23; Kurt answered the open questions the same day (see Decisions),
+then a review against the code found gaps and he settled those too (see "Logging" and "Review follow-ups"; where they
+differ from Scope or Tests, they win).
 **Owner of the decisions:** Kurt.
 
 ## Why
@@ -97,6 +99,35 @@ Seen failing, then passing, as usual:
 
 Under `aspire run` the browser keeps exporting straight to the Aspire dashboard as it does today; the relay is the
 Azure path (the Goal's "the Aspire dashboard exactly as it is today").
+
+### Logging (Kurt, 2026-11-23, after review)
+
+Q3 as first written could not work: `ConfigureSerilog` runs `ClearProviders()` after `ConfigureOpenTelemetry`, and
+`AddSerilog` does not write to providers, so the provider `UseAzureMonitor()` registers would be removed. Serilog
+stays the structured logging front for every log call; the intent is to track Information and above.
+
+| # | Decision | Not chosen |
+| --- | --- | --- |
+| L1 path | **Serilog forwards to the OTel logging provider** (`writeToProviders: true`, no `ClearProviders()`), and the distro ships it. Template properties and `LogContext` enrichments become `customDimensions`; `operation_Id` comes from the current Activity. | `Serilog.Sinks.ApplicationInsights`; Serilog's OTLP sink to Azure (needs an agent or collector) |
+| L2 dashboard | **One path:** drop Serilog's OTLP sink and `Serilog.Sinks.OpenTelemetry`. The OTel provider exports to the dashboard (`UseOtlpExporter`) and to Azure Monitor alike. The dashboard's log view may render properties slightly differently; that is accepted. | Keeping Serilog's sink under the AppHost |
+| L3 levels | **App code Information+, framework Warning+:** `Default` Information; `Microsoft` and `System` Warning; `Microsoft.Hosting.Lifetime` Information. EF Core's SQL command logs drop out; SQL shows as dependency spans. | Everything Information+; today's levels unchanged |
+| L4 console | **Console sink Warning+ in Production**, unchanged in Development. The Container Apps environment already sends console output to the same Log Analytics workspace, so this stops every Information line being stored twice. | Compact JSON console; console as is |
+| L5 sampling | **Keep everything by default:** sampling ratio 1.0, one setting to lower it (`AzureMonitor:SamplingRatio` or similar), so no Information log is dropped with an unsampled trace. The ingestion cap is the backstop. | Distro defaults; sampled traces with unsampled logs |
+| L6 destructuring | **Nested structures become a JSON string property** before forwarding (`parse_json(customDimensions.Order)` in KQL); top-level properties stay separate fields. | The rendered string; dotted keys |
+| L7 browser logs | **The relay writes browser log records through `ILogger`** under a `Browser` category, with their attributes as structured properties and the browser trace id kept, so they follow L3, L4 and the enrichers. | Re-creating OTel LogRecords directly |
+
+### Review follow-ups (Kurt, 2026-11-23, all as recommended)
+
+| # | Decision |
+| --- | --- |
+| R1 relay guard | Q2b's "same-origin only" would refuse Blazor WebAssembly, which is cross-origin on its own Static Web App. The guard accepts **same-origin, judged by `Sec-Fetch-Site`** (behind the React Static Web App's linked backend the API sees the container app's host, so Origin vs Host is wrong), **or an origin in `Cors:AllowedOrigins`**. MAUI has no Azure path. |
+| R2 wire format | The relay takes **OTLP/HTTP JSON**. React's Azure path uses **`@opentelemetry/exporter-trace-otlp-http` and `@opentelemetry/exporter-logs-otlp-http` (approved new npm packages)**; the `-proto` exporters stay for the dashboard. The .NET OTLP exporter has no JSON mode, so Blazor gets a small hand-written OTLP-JSON exporter in `Template.Blazor.Maui.Pages`. |
+| R3 database spans | Postgres and SQL Server already emit them: the Aspire EF integrations bring `Npgsql.OpenTelemetry` and the SqlClient instrumentation. That slice becomes a test that their sources reach the tracer. **SQLite gets no database spans** (the EF Core instrumentation is still beta). There are three providers, not two. |
+| R4 live check | The relay re-emits through the API's exporter, which writes `requests` and `dependencies`, never `pageViews`. The check is: **the relayed browser span → the API `request` → the database `dependency`, under one `operation_Id`.** Relayed spans carry an attribute marking them as from the browser. |
+| R5 discovery | The browser finds the relay **at run time**: `GET /client-telemetry/config` (today Development only) also answers in Production with the relay path when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set; otherwise telemetry stays off. React and Blazor read the same answer, and factory previews need no build-time variable. |
+| R6 rate limit key | Behind the Static Web App and ingress, `RemoteIpAddress` is a proxy. The limiter partitions on the **first `X-Forwarded-For` entry**, read only there; no forwarded-headers middleware for the whole app. Spoofable, which is acceptable for a rate limit. |
+| R7 Functions | The Functions worker exports through `AddServiceDefaults` too, beside the host's own Application Insights records. The duplicates are **documented, not fixed** (no `Microsoft.Azure.Functions.Worker.OpenTelemetry`). |
+| R8 IaC | The events container app and `functions.tf` already get the connection string, so the new `terraform test` is shown red by a deliberate break, not a real gap. The `observability.tf` comment is still fixed. |
 
 ## The questions as they were asked
 
