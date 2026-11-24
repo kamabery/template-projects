@@ -637,6 +637,8 @@ knowing before changing it (`specs/azure-monitor-telemetry.md`, Q2, R1-R6):
   needs no build variable. The relay is excluded from the OpenAPI contract.
 - **Postgres and SQL Server queries are dependency spans** through the Aspire EF integrations
   (`DatabaseSpanTests`); SQLite has none.
+- **Each environment's Workbook** (`IaC/workbooks/telemetry.json`) is that telemetry on one page; its
+  JSON must not mention the sourceName token or the resource name (`tests/telemetry.tftest.hcl`).
 
 ### The fault-injection endpoints
 

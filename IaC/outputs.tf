@@ -67,3 +67,22 @@ output "database_storage_account_name" {
   description = "Null except on the SQLite branch."
   value       = module.database.storage_account_name
 }
+
+output "application_insights_app_id" {
+  description = "What `az monitor app-insights query --app` takes."
+  value       = azurerm_application_insights.main.app_id
+}
+
+output "application_insights_name" {
+  value = azurerm_application_insights.main.name
+}
+
+output "telemetry_workbook_url" {
+  description = "The environment's telemetry Workbook in the portal."
+  value       = "https://portal.azure.com/#resource${azurerm_application_insights_workbook.main.id}/workbook"
+}
+
+output "trace_page_path" {
+  description = "The resource page. Loading it makes the read the factory's telemetry check traces: page load, fetch, API request, database call."
+  value       = "/widgets"
+}
