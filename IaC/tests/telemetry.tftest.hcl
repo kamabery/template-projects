@@ -192,3 +192,39 @@ run "the_workbook_queries_avoid_kql_reserved_column_names" {
     error_message = "A Workbook query names a column last, count or first, which KQL reserves; the grid would show a syntax error."
   }
 }
+
+# Entity history: everything logged or traced about one entity, found by the generic entity.type and
+# entity.id pair every log carries, whatever the resource is called. The type comes from a parameter,
+# so the query names no resource and no project; the tokens are split here so that substitution
+# cannot rewrite this check along with what it checks.
+run "the_workbook_has_an_entity_history_section" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for name in ["EntityType", "EntityId"] : anytrue([
+        for item in jsondecode(azurerm_application_insights_workbook.main.data_json).items :
+        item.type == 9 && anytrue([for p in item.content.parameters : p.name == name && p.type == 1])
+      ])
+    ])
+    error_message = "The Entity history section needs its EntityType and EntityId text parameters."
+  }
+  assert {
+    condition = anytrue([
+      for item in jsondecode(azurerm_application_insights_workbook.main.data_json).items :
+      item.name == "entity-history" && item.type == 3
+      && strcontains(item.content.query, "customDimensions[\"entity.type\"]) == \"{EntityType}\"")
+      && strcontains(item.content.query, "customDimensions[\"entity.id\"]) == \"{EntityId}\"")
+      && strcontains(item.content.query, "operation_Id")
+    ])
+    error_message = "The entity-history query must match entity.type and entity.id from the parameters and show operation_Id."
+  }
+  assert {
+    condition = alltrue([
+      for item in jsondecode(azurerm_application_insights_workbook.main.data_json).items :
+      !strcontains(lower(item.content.query), "wid${"get"}") && !strcontains(lower(item.content.query), "temp${"late"}")
+      if item.name == "entity-history"
+    ])
+    error_message = "The entity-history query must not name the sample resource or the project: its type comes from the parameter."
+  }
+}
