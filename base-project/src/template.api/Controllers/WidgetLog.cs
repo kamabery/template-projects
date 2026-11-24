@@ -6,7 +6,7 @@ namespace template.api.Controllers;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Generated methods keep the message template constant and skip the work when the level is off,
+/// Generated methods keep the message text constant and skip the work when the level is off,
 /// which is what CA2254 and CA1848 (errors in Directory.Build.props) insist on. None of them takes the
 /// id: the entity scope around the action already puts <c>entity.type</c> and <c>entity.id</c> on the
 /// record.
