@@ -178,3 +178,17 @@ run "the_proof_outputs_are_set" {
     error_message = "trace_page_path is a path the check appends to the frontend URL."
   }
 }
+
+# KQL reserves words such as last and count, and a query that names a column after one does not parse:
+# the live check (J-043) found the Failures and Exceptions grids erroring on "last = max(timestamp)".
+run "the_workbook_queries_avoid_kql_reserved_column_names" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for item in jsondecode(azurerm_application_insights_workbook.main.data_json).items :
+      !can(regex("(^|[^A-Za-z_])(last|count|first) =", item.content.query)) if item.type == 3
+    ])
+    error_message = "A Workbook query names a column last, count or first, which KQL reserves; the grid would show a syntax error."
+  }
+}
