@@ -145,7 +145,7 @@ public sealed class EntityScopeTests : IAsyncLifetime
     private async Task<Widget> FirstWidgetAsync() =>
         (await _api.Client.GetFromJsonAsync<List<Widget>>("/Widgets"))!.First();
 
-    private (IReadOnlyDictionary<string, object?> Attributes, Activity Activity) LogInside(Func<ILogger, IDisposable> scope)
+    private (IReadOnlyDictionary<string, object?> Attributes, Activity Activity) LogInside(Func<ILogger, IDisposable?> scope)
     {
         var marker = Guid.NewGuid().ToString("N");
         var logger = _api.Logger(Category);

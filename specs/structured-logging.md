@@ -1,6 +1,6 @@
 # Structured logging: W3C trace context and entity ids on every log
 
-**Status:** ready to build, written 2026-11-24 from Kurt's grill; D17 and D18 confirmed the same day. It comes after `application-insights-workbook`
+**Status:** built and live-checked 2026-11-24 (branch `feature/structured-logging`); written the same day from Kurt's grill, D17 and D18 confirmed. It comes after `application-insights-workbook`
 (template-projects#13, merged) and before factory spec 2 (`factory check telemetry`), so that spec 2 can
 assert it from the start.
 **Owner of the decisions:** Kurt.
@@ -211,6 +211,58 @@ Red first for each. New files follow the existing `Harness/` layout, and records
 - **`GET /Widgets/{id}` changes the contract.** The ContractTests and the generated clients must
   regenerate in the same commit. A scaffold that already added its own `{id}` route conflicts. The
   hand-adoption note in the README covers that.
+
+## Build notes (2026-11-24)
+
+What the build found that the spec, as drafted, did not say:
+
+- **The Blazor relay exporter dropped scopes.** `OtlpJsonLogExporter` wrote only a record's own
+  attributes, so a Blazor WebAssembly log inside `ForEntity` would have lost `entity.*` on its way
+  to the relay. It now writes scope values as attributes, as the OTLP exporter does. The Blazor
+  `ForEntity` takes a type and an id only: the relay keeps an OTLP array as raw JSON text, so
+  `entity.related` from Blazor would not match the server's shape, and nothing there names one.
+- **An `.editorconfig` severity cannot turn off a rule `<WarningsAsErrors>` names.** The one
+  exclusion, CA1848 in `*.tests` projects (they probe the pipeline with ad hoc logs), is a
+  conditional `NoWarn` in `Directory.Build.props`. CA2254 stays on there.
+- **`enduser.id` on the request span** is set in the ASP.NET Core instrumentation's
+  `EnrichWithHttpResponse`, after authentication has run. The Workbook falls back to
+  `user_AuthenticatedId`.
+- **The prose guard** refuses "message template" in comments (the sourceName token as English).
+
+## Live check (2026-11-24, J-044 on telproof, preview `j044`)
+
+telproof (postgres + react, resource `Note`) adopted this branch through factory job J-044, which
+copied 31 files verbatim from a reference scaffold of the branch (`-n telproof --resource Note`).
+Canary #39, on this branch's pack, passed first. J-044 went through in one round, all four reviews
+PASS, 101 API tests, 10 Vitest, 24 Terraform runs, $5.54.
+
+- **The miss, deterministic:** `GET /api/Notes/0` on the preview answered 404 ProblemDetails,
+  `traceId 00-02ade55bb4f864590ff3202055784e54-2d73c4552156f640-01`.
+- **Its log, in `traces`:** `Note not found`, severity 1 (Information), category
+  `telproof.api.Controllers.NotesController`, `operation_Id` `02ade55b…` (the request's), and in
+  `customDimensions`: `entity.type = Note`, `entity.id = "0"`, `trace_id = 02ade55b…`,
+  `span_id = 2d73c4552156f640`, `trace_flags = 01`, `parent_span_id = 1c1df20130270be7`, plus
+  `EventId {"Name":"NoteNotFound"}`.
+- **Its request:** `GET Notes/{id:int}`, 404, with `entity.type = Note` and `entity.id = "0"` in
+  `customDimensions` (the Activity tags), `operation_ParentId` = the log's `parent_span_id`.
+- **What App Insights keeps (Risks):** all four trace fields survive in `customDimensions`, under
+  their own names, beside `operation_Id` / `operation_ParentId`. Nothing is renamed or dropped.
+- **Entity history:** the Workbook's query, run as stored with `Note` / `0`, returns the trace and
+  the request, newest first, with `trace_id` and `operation_Id` equal.
+- **Not observed:** `enduser.id` (the request was anonymous), and the CLEF console in
+  `ContainerAppConsoleLogs_CL`: the API logged nothing at Warning, the console's level in
+  Production. The rows there were the Easy Auth sidecar's and a Kerberos library notice.
+
+For spec 2's check, the KQL that found it:
+
+```kusto
+let op = toscalar(requests | where timestamp > ago(3h) and url endswith "/Notes/0"
+    | top 1 by timestamp desc | project operation_Id);
+union requests, traces
+| where operation_Id == op
+| project timestamp, itemType, name, resultCode, message, operation_Id, operation_ParentId, customDimensions
+| order by timestamp asc
+```
 
 ## Cost
 
