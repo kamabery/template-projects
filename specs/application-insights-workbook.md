@@ -168,3 +168,46 @@ scaffold, which needs Kurt's yes. The factory already runs Playwright for the si
   ingestion is unchanged.
 - **Build:** one session. It's about the size of a single slice of `azure-monitor-telemetry`, plus
   one live check.
+
+## Live check (2026-11-24, J-043 on telproof, preview `j043`)
+
+The proof `azure-monitor-telemetry` never got. telproof (postgres + react, resource `Note`) adopted the
+Workbook by hand through factory job J-043 (J-042 was discarded for a gate line it could never pass).
+Canary #37 on this branch's templates also passed: a fresh preview applies with the Workbook.
+
+- **The Workbook exists:** `Microsoft.Insights/workbooks/bfc105e0-…`, `telproof j043 telemetry`,
+  `kind: shared`, its `sourceId` the App Insights id lowercased, as Azure stores it.
+- **One read, traced:** loading `/notes` gave a Transactions row `GET Notes` with `hasBrowser`,
+  `hasRequest` and `hasDb` all true. Its items, in order: the browser's `GET /api/Notes` (`HTTP`,
+  `relay.source = browser`, 216 ms), the request `GET Notes` (7 ms), the `postgresql` dependency
+  (3 ms), then the trace `received-first-response`.
+- **Dependency types, read off real data:** Postgres is `postgresql`. Relayed browser spans are
+  `HTTP` (the fetch) and `InProc` (`documentLoad`, `documentFetch`, `resourceFetch`, `click`). The page
+  load (`documentLoad`) is its own operation, not the fetch's parent, so a transaction starts at the
+  fetch. **SQL Server's `SQL` is still unverified:** no sqlserver preview was run.
+- **A bug the live run found:** Failures and Exceptions named a column `last` (and `count`), which KQL
+  reserves, so both grids failed to parse. Renamed to `lastSeen` and `occurrences`; a test now refuses
+  reserved column names. telproof's J-043 copy still has the old two queries.
+- **Browser logs** were empty: the page logged no error. The query ran.
+- **The deep link** `https://portal.azure.com/#resource<workbook id>/workbook` was not checked: the portal
+  asked for a sign-in. Kurt checks it by hand.
+- **Querying:** the `application-insights` az extension is not installed, so the queries ran through
+  `az rest --resource https://api.applicationinsights.io` against
+  `https://api.applicationinsights.io/v1/apps/<application_insights_app_id>/query`.
+
+### KQL for spec 2's check
+
+Wait for ingestion (1–5 minutes, sometimes over 10), then pass when a row comes back:
+
+```kusto
+union requests, dependencies
+| where timestamp > ago(30m)
+| summarize hasBrowser = countif(tostring(customDimensions["relay.source"]) == "browser") > 0,
+            hasRequest = countif(itemType == "request") > 0,
+            hasDb      = countif(itemType == "dependency" and type in~ ("postgresql", "SQL")) > 0
+            by operation_Id
+| where hasBrowser and hasRequest and (hasDb or <provider is sqlite>)
+| take 1
+```
+
+No row yet is "no data yet" until the window closes. After that, it is a failure.
