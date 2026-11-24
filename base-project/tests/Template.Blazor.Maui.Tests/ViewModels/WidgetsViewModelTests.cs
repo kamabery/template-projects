@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using AutoFixture.Xunit2;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using Template.Blazor.Maui.Pages.Providers;
@@ -75,6 +76,28 @@ public sealed class WidgetsViewModelTests
         changed.ShouldSatisfyAllConditions(
             () => changed.ShouldContain(nameof(WidgetsViewModel.Widgets)),
             () => changed.ShouldContain(nameof(WidgetsViewModel.IsLoading)));
+    }
+
+    [Theory, AutoNSubstituteData]
+    public async Task LoadCommand_WhenTheApiThrows_LogsTheErrorUnderTheEntityType(IApi api)
+    {
+        // A real logger: the error has to reach the pipeline inside the entity scope, the way the
+        // dashboard and the relay see it.
+        var processor = new CapturingLogProcessor();
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddOpenTelemetry(otel =>
+        {
+            otel.IncludeScopes = true;
+            otel.AddProcessor(processor);
+        }));
+        var viewModel = new WidgetsViewModel(api, loggerFactory.CreateLogger<WidgetsViewModel>());
+        api.GetWidgets().ThrowsAsync(new HttpRequestException("harness is down"));
+
+        await viewModel.LoadCommand.ExecuteAsync(null);
+
+        var record = processor.Records.ShouldHaveSingleItem();
+        record.Level.ShouldBe(LogLevel.Error);
+        record.Scopes["entity.type"].ShouldBe("Widget");
+        record.Scopes.ShouldNotContainKey("entity.id");
     }
 
     [Theory, AutoNSubstituteData]

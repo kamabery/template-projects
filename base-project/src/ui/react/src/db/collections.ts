@@ -2,6 +2,7 @@ import { createCollection } from '@tanstack/react-db'
 import { queryCollectionOptions } from '@tanstack/query-db-collection'
 import { fetchWidgets, type Widget } from '@/lib/api'
 import { queryClient } from '@/lib/query-client'
+import { logError } from '@/lib/telemetry'
 
 export const widgetsQueryKey = ['widgets'] as const
 
@@ -15,7 +16,17 @@ export const widgetsCollection = createCollection(
     id: 'widgets',
     queryClient,
     queryKey: widgetsQueryKey,
-    queryFn: ({ signal }) => fetchWidgets(signal),
+    queryFn: async ({ signal }) => {
+      try {
+        return await fetchWidgets(signal)
+      } catch (error) {
+        // The list's load failure, logged under the entity type (a list has no id).
+        if (!signal.aborted) {
+          logError(`Loading the widgets failed: ${String(error)}`, { entity: { type: 'Widget' } })
+        }
+        throw error
+      }
+    },
     // The primary key from the API. `id` is optional in the generated type
     // because the server assigns it, but every row that has been served has one.
     getKey: (widget) => widget.id!,

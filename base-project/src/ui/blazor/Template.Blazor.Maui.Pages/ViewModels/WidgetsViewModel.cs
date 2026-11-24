@@ -5,6 +5,7 @@ using Template.Blazor.Maui.Pages.Models;
 using Template.Blazor.Maui.Pages.Mvvm;
 using Template.Blazor.Maui.Pages.Providers;
 using Template.Blazor.Maui.Pages.Stores;
+using Template.Blazor.Maui.Pages.Telemetry;
 
 namespace Template.Blazor.Maui.Pages.ViewModels;
 
@@ -83,8 +84,12 @@ public partial class WidgetsViewModel(
         {
             // Logged as well as shown. AddSharedTelemetry exports ILogger records over OTLP, so an
             // error the user sees as a banner is also an error a developer sees in the dashboard
-            // under this host's own resource - which is what /harness/fail-next is for.
-            LogLoadFailed(logger, ex);
+            // under this host's own resource - which is what /harness/fail-next is for. Under the
+            // entity type, with no id: a list has none.
+            using (logger.ForEntity(nameof(Widget)))
+            {
+                LogLoadFailed(logger, ex);
+            }
 
             ErrorMessage = $"Could not load the widgets: {ex.Message}";
         }
