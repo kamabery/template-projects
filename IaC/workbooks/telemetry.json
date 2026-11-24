@@ -93,7 +93,7 @@
       "name": "failures",
       "content": {
         "version": "KqlItem/1.0",
-        "query": "requests\n| where success == false\n| summarize failures = count(), last = max(timestamp) by cloud_RoleName, operation_Name, resultCode\n| order by failures desc",
+        "query": "requests\n| where success == false\n| summarize failures = count(), lastSeen = max(timestamp) by cloud_RoleName, operation_Name, resultCode\n| order by failures desc",
         "size": 0,
         "title": "Failed requests",
         "timeContextFromParameter": "TimeRange",
@@ -107,7 +107,7 @@
       "name": "exceptions",
       "content": {
         "version": "KqlItem/1.0",
-        "query": "exceptions\n| summarize count = count(), last = max(timestamp), sample = take_any(outerMessage) by cloud_RoleName, type\n| order by count desc",
+        "query": "exceptions\n| summarize occurrences = count(), lastSeen = max(timestamp), sample = take_any(outerMessage) by cloud_RoleName, type\n| order by occurrences desc",
         "size": 0,
         "title": "Exceptions",
         "timeContextFromParameter": "TimeRange",
