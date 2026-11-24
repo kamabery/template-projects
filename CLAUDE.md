@@ -568,6 +568,13 @@ Things worth knowing before changing it:
   Information line on both would be stored twice. `ConsoleLevelTests` covers it.
 - **`UseSerilogRequestLogging` is deliberately absent.** `AddAspNetCoreInstrumentation` already
   records every request as a span, and `Microsoft.AspNetCore` is pinned at `Warning`.
+- **Log through `[LoggerMessage]`, inside an entity scope, and `entity.id` is always the surrogate
+  key.** CA2254 and CA1848 are build errors (`Directory.Build.props`; `*.tests` projects keep CA2254
+  only). A controller gets `[EntityType(typeof(T))]` and `EntityScopeFilter` scopes every `{id}`
+  action; elsewhere `logger.ForEntity(type, id, related...)` does. Every record also carries
+  `trace_id`, `span_id`, `trace_flags`, `parent_span_id` and, when signed in, `enduser.id` (oid, else
+  sub). A natural key such as an email never goes in a log, as `entity.id` or anywhere else
+  (`specs/structured-logging.md`, D1-D18).
 
 ### Client RUM — the Blazor hosts
 

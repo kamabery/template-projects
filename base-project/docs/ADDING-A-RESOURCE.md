@@ -83,6 +83,40 @@ to use the generated member.
 
 *Verify:* `dotnet test tests/template.api.tests`
 
+### Logging
+
+Every log names the entity it is about, with the same two fields whatever the resource is called:
+`entity.type` and `entity.id`. Three pieces, all in the worked example:
+
+1. **`[EntityType(typeof(Invoice))]` on the controller.** `EntityScopeFilter` then opens the entity
+   scope for every action with an `{id}` in its route, so those actions log under `entity.id` without
+   naming it. The type comes from the attribute, not the controller name, which is plural.
+2. **An `InvoiceLog` class** beside the controller: a `static partial class` of `[LoggerMessage]`
+   methods, like `Controllers/WidgetLog.cs`. A plain `logger.LogInformation(...)` does not build
+   (CA1848), and neither does an interpolated message (CA2254). Writes and misses log at Information:
+   `InvoiceCreated`, `InvoiceUpdated`, `InvoiceDeleted`, `InvoiceNotFound`, and any refusal
+   (validation, concurrency). Reads log at Debug. The methods take no id; the scope supplies it.
+3. **`ForEntity` where there is no route id.** A create has no id until it is saved, so open the
+   scope after the save:
+
+   ```csharp
+   var saved = await invoices.AddAsync(invoice, cancellationToken);
+   using (logger.ForEntity(nameof(Invoice), saved.Id, (nameof(Customer), saved.CustomerId)))
+   {
+       logger.InvoiceCreated();
+   }
+   ```
+
+   The pairs after the id become `entity.related` (`["Customer:7"]`). A list opens
+   `logger.ForEntity(nameof(Invoice))` with no id.
+
+**`entity.id` is the surrogate key**, an int or a GUID, and nothing else. Never a natural key such as
+an email address, a customer number or a name, even when it is unique: it would put personal data in
+every log store, and it can change. If the resource has no surrogate key, add one before it logs.
+
+*Verify:* a test like `EntityScopeTests` that asks for a missing id and finds the Information record
+with `entity.type` and `entity.id`.
+
 ## 4. Regenerate the contract, then the clients
 
 ```bash
