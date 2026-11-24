@@ -1,6 +1,6 @@
 # Structured logging: W3C trace context and entity ids on every log
 
-**Status:** draft, written 2026-11-24 from Kurt's grill. It comes after `application-insights-workbook`
+**Status:** ready to build, written 2026-11-24 from Kurt's grill; D17 and D18 confirmed the same day. It comes after `application-insights-workbook`
 (template-projects#13, merged) and before factory spec 2 (`factory check telemetry`), so that spec 2 can
 assert it from the start.
 **Owner of the decisions:** Kurt.
@@ -58,17 +58,8 @@ dashboard and the console, which writes compact JSON in Azure.
 | D14 | Template API | **Add `GET /Widgets/{id}`** (found at Debug, not found at Information), so the filter and a miss exist in every scaffold. Writes stay a scaffold concern, and ADDING-A-RESOURCE shows their pattern. | Full CRUD; plumbing only |
 | D15 | Live proof | **A not-found by id:** spec 2's check calls `GET /api/<Resources>/0` and finds the Information log with `entity.id = "0"` under that request's `operation_Id`. Deterministic, creates no data, and works on SQLite. | List read at Information; wait for writes |
 | D16 | Event services, Functions | **Out**, deferred with event-driven telemetry (2026-11-23). | In |
-
-### Changed from the grill (Kurt to confirm)
-
-- **`enduser.id` source claim.** The template's auth is generic OIDC (`Auth:Authority`), not Entra-only.
-  Entra puts the object id in `oid`, which ASP.NET maps to
-  `http://schemas.microsoft.com/identity/claims/objectidentifier`; other issuers have only `sub`. So
-  `enduser.id` takes `oid` (either form) and falls back to `sub`. It's absent when anonymous.
-- **Console in Production stays Warning and above** (`ConsoleLevelTests`): ACA copies stdout into the same
-  workspace, and Information on both would be stored twice. "Everywhere" therefore means the console
-  *format* is compact JSON in Azure; its level doesn't change. Outside Azure (no
-  `APPLICATIONINSIGHTS_CONNECTION_STRING`) the console stays human-readable text.
+| D17 | `enduser.id` source claim | **`oid` (either claim form), else `sub`; absent when anonymous.** The template's auth is generic OIDC (`Auth:Authority`): Entra puts the object id in `oid` (mapped by ASP.NET to `http://schemas.microsoft.com/identity/claims/objectidentifier`), and other issuers have only `sub`. Confirmed by Kurt 2026-11-24. | `oid` only |
+| D18 | Console in Production | **Stays Warning and above** (`ConsoleLevelTests`): ACA copies stdout into the same workspace, so Information on both would be stored twice. "Everywhere" (D1) means the console *format* is compact JSON in Azure; its level doesn't change. Outside Azure (no `APPLICATIONINSIGHTS_CONNECTION_STRING`) the console stays human-readable text. Confirmed by Kurt 2026-11-24. | Information on the console in Production |
 
 ## Scope
 
