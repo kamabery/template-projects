@@ -10,7 +10,7 @@ namespace template.api.Startup;
 /// is sent and no preflight happens. The WebAssembly host is a genuinely different origin from
 /// this API and its requests are preflighted, so without this policy every one of them fails.
 /// </remarks>
-public static class CorsConfigurator
+public static partial class CorsConfigurator
 {
     public const string WasmClientPolicy = "WasmClient";
 
@@ -48,17 +48,18 @@ public static class CorsConfigurator
     {
         if (ReadAllowedOrigins(app.Configuration).Length == 0)
         {
-            app.Logger.LogWarning(
-                "{Key} is empty, so no browser origin is allowed. Requests from the WebAssembly " +
-                "host will fail with \"TypeError: Failed to fetch\" even though this API returns " +
-                "200, because the response carries no Access-Control-Allow-Origin header. The " +
-                "React and MAUI clients are unaffected. Set {Key} to the WebAssembly host's origin.",
-                AllowedOriginsKey,
-                AllowedOriginsKey);
+            LogNoAllowedOrigins(app.Logger, AllowedOriginsKey);
         }
 
         return app;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message =
+        "{Key} is empty, so no browser origin is allowed. Requests from the WebAssembly " +
+        "host will fail with \"TypeError: Failed to fetch\" even though this API returns " +
+        "200, because the response carries no Access-Control-Allow-Origin header. The " +
+        "React and MAUI clients are unaffected. Set it to the WebAssembly host's origin.")]
+    private static partial void LogNoAllowedOrigins(ILogger logger, string key);
 
     internal static string[] ReadAllowedOrigins(IConfiguration configuration) =>
         configuration.GetSection(AllowedOriginsKey).Get<string[]>() ?? [];

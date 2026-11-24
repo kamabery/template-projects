@@ -29,7 +29,7 @@ namespace template.api.Startup;
 /// <see cref="Controllers.AuthController"/>.
 /// </para>
 /// </remarks>
-public static class AuthConfigurator
+public static partial class AuthConfigurator
 {
     private const string AuthorityKey = "Auth:Authority";
 
@@ -62,15 +62,21 @@ public static class AuthConfigurator
         var authority = app.Configuration[AuthorityKey];
         if (string.IsNullOrWhiteSpace(authority))
         {
-            app.Logger.LogInformation("{Key} is not set, so writes are open. Set it to require a signed-in user for writes.", AuthorityKey);
+            LogWritesOpen(app.Logger, AuthorityKey);
         }
         else
         {
-            app.Logger.LogInformation("Writes require a user signed in at {Authority}.", authority);
+            LogWritesRequireSignIn(app.Logger, authority);
         }
 
         return app;
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Key} is not set, so writes are open. Set it to require a signed-in user for writes.")]
+    private static partial void LogWritesOpen(ILogger logger, string key);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Writes require a user signed in at {Authority}.")]
+    private static partial void LogWritesRequireSignIn(ILogger logger, string authority);
 
     private sealed class WritesRequireSignIn : IActionModelConvention
     {

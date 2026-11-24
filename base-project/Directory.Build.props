@@ -13,6 +13,18 @@
          developer-tools registration. Every project must declare the configuration or the
          solution mapping breaks with MSB4126. -->
     <Configurations>Debug;Release;Development</Configurations>
+
+    <!-- Logs stay structured: CA2254 refuses a message template that varies (an interpolated
+         string), CA1848 refuses the LogX extension methods in favour of [LoggerMessage]. Errors, so
+         a log that would lose its properties does not build. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CA2254;CA1848</WarningsAsErrors>
+
+    <!-- The one exclusion: CA1848 in the test projects (*.tests). The suites log ad hoc on purpose -
+         they probe the logging pipeline itself, its levels, categories, scopes and sinks, with
+         throwaway categories and templates, and a generated method per probe would only hide what
+         each test logs. CA2254 stays on there. NoWarn rather than an .editorconfig severity, because
+         an .editorconfig cannot turn off a rule WarningsAsErrors names. -->
+    <NoWarn Condition="$(MSBuildProjectName.ToLowerInvariant().EndsWith('.tests'))">$(NoWarn);CA1848</NoWarn>
   </PropertyGroup>
 
 </Project>

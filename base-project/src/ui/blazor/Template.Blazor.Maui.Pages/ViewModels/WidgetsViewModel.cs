@@ -84,7 +84,7 @@ public partial class WidgetsViewModel(
             // Logged as well as shown. AddSharedTelemetry exports ILogger records over OTLP, so an
             // error the user sees as a banner is also an error a developer sees in the dashboard
             // under this host's own resource - which is what /harness/fail-next is for.
-            logger.LogError(ex, "Loading the widgets failed.");
+            LogLoadFailed(logger, ex);
 
             ErrorMessage = $"Could not load the widgets: {ex.Message}";
         }
@@ -94,4 +94,7 @@ public partial class WidgetsViewModel(
             IsLoading = false;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Loading the widgets failed.")]
+    private static partial void LogLoadFailed(ILogger logger, Exception exception);
 }
