@@ -187,10 +187,11 @@ Canary #37 on this branch's templates also passed: a fresh preview applies with 
   fetch. **SQL Server's `SQL` is still unverified:** no sqlserver preview was run.
 - **A bug the live run found:** Failures and Exceptions named a column `last` (and `count`), which KQL
   reserves, so both grids failed to parse. Renamed to `lastSeen` and `occurrences`; a test now refuses
-  reserved column names. telproof's J-043 copy still has the old two queries.
+  reserved column names. J-043 round 2 carried the rename to telproof and redeployed j043; all four queries
+  then ran live without error, and a fresh `/notes` load gave `GET Notes` with all three flags true.
 - **Browser logs** were empty: the page logged no error. The query ran.
-- **The deep link** `https://portal.azure.com/#resource<workbook id>/workbook` was not checked: the portal
-  asked for a sign-in. Kurt checks it by hand.
+- **The deep link** `https://portal.azure.com/#resource<workbook id>/workbook` opens the Workbook: Kurt
+  checked it in the portal after round 2, with `GET Notes` listed and Failures and Exceptions rendering.
 - **Querying:** the `application-insights` az extension is not installed, so the queries ran through
   `az rest --resource https://api.applicationinsights.io` against
   `https://api.applicationinsights.io/v1/apps/<application_insights_app_id>/query`.
