@@ -19,24 +19,32 @@ public sealed class ObservedApi : IAsyncDisposable
     private readonly ApiFactory _root = new();
     private readonly WebApplicationFactory<Program> _factory;
 
-    public ObservedApi(bool withClaims = false)
+    public ObservedApi(bool withClaims = false, params (string Key, string Value)[] settings)
     {
-        _factory = _root.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        _factory = _root.WithWebHostBuilder(builder =>
         {
-            services.ConfigureOpenTelemetryLoggerProvider(logging => logging.AddProcessor(Logs));
-            services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(Spans));
-            services.AddControllers().AddApplicationPart(typeof(ProbeLogController).Assembly);
-
-            if (withClaims)
+            foreach (var (key, value) in settings)
             {
-                services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, ClaimsAuthHandler>(ClaimsAuthHandler.SchemeName, null);
-                services.PostConfigure<AuthenticationOptions>(options =>
-                {
-                    options.DefaultAuthenticateScheme = ClaimsAuthHandler.SchemeName;
-                    options.DefaultChallengeScheme = ClaimsAuthHandler.SchemeName;
-                });
+                builder.UseSetting(key, value);
             }
-        }));
+
+            builder.ConfigureTestServices(services =>
+            {
+                services.ConfigureOpenTelemetryLoggerProvider(logging => logging.AddProcessor(Logs));
+                services.ConfigureOpenTelemetryTracerProvider(tracing => tracing.AddProcessor(Spans));
+                services.AddControllers().AddApplicationPart(typeof(ProbeLogController).Assembly);
+
+                if (withClaims)
+                {
+                    services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, ClaimsAuthHandler>(ClaimsAuthHandler.SchemeName, null);
+                    services.PostConfigure<AuthenticationOptions>(options =>
+                    {
+                        options.DefaultAuthenticateScheme = ClaimsAuthHandler.SchemeName;
+                        options.DefaultChallengeScheme = ClaimsAuthHandler.SchemeName;
+                    });
+                }
+            });
+        });
 
         Client = _factory.CreateClient();
     }

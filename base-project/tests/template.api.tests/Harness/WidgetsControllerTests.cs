@@ -97,6 +97,27 @@ public sealed class WidgetsControllerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetWidget_ReturnsTheRowWithThatId()
+    {
+        var first = (await GetWidgetsAsync())[0];
+
+        var widget = await _client.GetFromJsonAsync<Widget>($"/Widgets/{first.Id}");
+
+        widget.ShouldNotBeNull();
+        widget!.Id.ShouldBe(first.Id);
+        widget.Name.ShouldBe(first.Name);
+    }
+
+    [Fact]
+    public async Task GetWidget_ForAMissingId_IsANotFoundProblem()
+    {
+        var response = await _client.GetAsync("/Widgets/0");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
+    }
+
+    [Fact]
     public async Task Get_SerializesTheComputedProperty()
     {
         // IsLowStock is [NotMapped] and get-only, so it is written to the wire but never bound
@@ -157,6 +178,8 @@ public sealed class WidgetsControllerTests : IAsyncLifetime
         document.ShouldSatisfyAllConditions(
             () => document.ShouldContain("/Widgets", Case.Sensitive),
             () => document.ShouldContain("GetWidgets", Case.Sensitive),
+            () => document.ShouldContain("/Widgets/{id}", Case.Sensitive),
+            () => document.ShouldContain("\"GetWidget\"", Case.Sensitive),
             () => document.ShouldContain("/harness/fail-next", Case.Sensitive));
     }
 

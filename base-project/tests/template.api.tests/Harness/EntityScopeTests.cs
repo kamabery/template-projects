@@ -1,7 +1,11 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using template.api.tests.Infrastructure;
+using template.data;
 
 namespace template.api.tests.Harness;
 
@@ -14,12 +18,14 @@ namespace template.api.tests.Harness;
 public sealed class EntityScopeTests : IAsyncLifetime
 {
     private const string Category = "template.api.EntityProbe";
+    private const string ControllerCategory = "template.api.Controllers.WidgetsController";
 
     private ObservedApi _api = null!;
 
     public Task InitializeAsync()
     {
-        _api = new ObservedApi();
+        // Debug for the app, so a read's log is visible as well as a miss's.
+        _api = new ObservedApi(settings: ("Serilog:MinimumLevel:Default", "Debug"));
         return Task.CompletedTask;
     }
 
@@ -75,6 +81,69 @@ public sealed class EntityScopeTests : IAsyncLifetime
 
         _api.LogWith("Marker", marker).Attributes.ShouldNotContainKey("entity.type");
     }
+
+    [Fact]
+    public async Task GetWidget_ForAMissingId_LogsNotFoundAtInformation_UnderTheEntity()
+    {
+        var response = await _api.Client.GetAsync("/Widgets/0");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var record = ControllerRecords("0").ShouldHaveSingleItem();
+        record.ShouldSatisfyAllConditions(
+            () => record.Level.ShouldBe(LogLevel.Information),
+            () => record.Attributes["{OriginalFormat}"].ShouldBe("Widget not found"),
+            () => record.Attributes["entity.type"].ShouldBe("Widget"));
+
+        var span = await _api.RequestSpanAsync(record.TraceId);
+        span.GetTagItem("entity.type").ShouldBe("Widget");
+        span.GetTagItem("entity.id").ShouldBe("0");
+    }
+
+    [Fact]
+    public async Task GetWidget_ForAnExistingId_LogsAtDebugOnly()
+    {
+        var widget = await FirstWidgetAsync();
+
+        (await _api.Client.GetAsync($"/Widgets/{widget.Id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var record = ControllerRecords(widget.Id.ToString(CultureInfo.InvariantCulture)).ShouldHaveSingleItem();
+        record.Level.ShouldBe(LogLevel.Debug);
+        record.Attributes["{OriginalFormat}"].ShouldBe("Widget found");
+    }
+
+    [Fact]
+    public async Task TheEntityId_IsTheSurrogateKey_NeverANaturalOne()
+    {
+        // The Name is unique, which makes it tempting as an id; it is also what a user typed. Logs
+        // carry the database key only (D13).
+        var widget = await FirstWidgetAsync();
+
+        await _api.Client.GetAsync($"/Widgets/{widget.Id}");
+
+        _api.Logs.Records
+            .Where(r => r.Attributes.ContainsKey("entity.id"))
+            .SelectMany(r => r.Attributes.Values)
+            .ShouldNotContain(widget.Name);
+    }
+
+    [Fact]
+    public async Task TheList_LogsUnderTheTypeWithNoId()
+    {
+        await _api.Client.GetAsync("/Widgets");
+
+        var record = _api.Logs.Records
+            .Where(r => r.Category == ControllerCategory && Equals(r.Attributes.GetValueOrDefault("{OriginalFormat}"), "Listed {Count} widgets"))
+            .Last();
+        record.Level.ShouldBe(LogLevel.Debug);
+        record.Attributes["entity.type"].ShouldBe("Widget");
+        record.Attributes.ShouldNotContainKey("entity.id");
+    }
+
+    private IEnumerable<CapturedLog> ControllerRecords(string id) =>
+        _api.Logs.Records.Where(r => r.Category == ControllerCategory && Equals(r.Attributes.GetValueOrDefault("entity.id"), id));
+
+    private async Task<Widget> FirstWidgetAsync() =>
+        (await _api.Client.GetFromJsonAsync<List<Widget>>("/Widgets"))!.First();
 
     private (IReadOnlyDictionary<string, object?> Attributes, Activity Activity) LogInside(Func<ILogger, IDisposable> scope)
     {
