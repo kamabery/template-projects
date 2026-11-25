@@ -31,6 +31,40 @@ import {
   resolveTelemetryTarget,
 } from '@/lib/telemetryTarget'
 
+/** An entity as the API's logs name it: its type, and its surrogate key. */
+export interface LoggedEntity {
+  type: string
+  id?: string | number
+}
+
+/**
+ * Logs an error about an entity, with the same keys the API puts on its own
+ * logs - `entity.type`, `entity.id` (always a string) and `entity.related` as
+ * `Type:id` - so one query finds the entity's history from the browser to the
+ * database. The id is the surrogate key, never a natural one such as an email.
+ * A no-op until telemetry has started.
+ */
+export function logError(
+  message: string,
+  options: { entity?: LoggedEntity; related?: Array<Required<LoggedEntity>> } = {},
+): void {
+  const attributes: Record<string, string | Array<string>> = {}
+  if (options.entity) {
+    attributes['entity.type'] = options.entity.type
+    if (options.entity.id !== undefined) attributes['entity.id'] = String(options.entity.id)
+  }
+  if (options.related?.length) {
+    attributes['entity.related'] = options.related.map(({ type, id }) => `${type}:${id}`)
+  }
+
+  logs.getLogger('browser').emit({
+    severityNumber: 17,
+    severityText: 'Error',
+    body: message,
+    attributes,
+  })
+}
+
 function installErrorLogging(): void {
   const logger = logs.getLogger('browser')
 

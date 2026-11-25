@@ -84,6 +84,33 @@ public sealed class OtlpJsonExporterTests
             () => Attribute(record, "WidgetId").GetProperty("intValue").GetString().ShouldBe("42"));
     }
 
+    [Fact]
+    public async Task LogExporter_WritesScopeValuesAsAttributes()
+    {
+        // The entity scope is how a log names what it is about; the relay only sees attributes.
+        var handler = new CapturingHttpHandler();
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddOpenTelemetry(otel =>
+        {
+            otel.IncludeScopes = true;
+            otel.AddProcessor(new SimpleLogRecordExportProcessor(
+                new OtlpJsonLogExporter(() => new HttpClient(handler), Relay)));
+        }));
+        var logger = loggerFactory.CreateLogger("Widgets");
+
+        using (logger.ForEntity("Widget", 42))
+        {
+            logger.LogWarning("Widget is out of stock");
+        }
+
+        var (_, body) = await handler.FirstRequest.WaitAsync(TimeSpan.FromSeconds(5));
+        var record = JsonDocument.Parse(body).RootElement
+            .GetProperty("resourceLogs")[0].GetProperty("scopeLogs")[0].GetProperty("logRecords")[0];
+
+        record.ShouldSatisfyAllConditions(
+            () => Attribute(record, "entity.type").GetProperty("stringValue").GetString().ShouldBe("Widget"),
+            () => Attribute(record, "entity.id").GetProperty("stringValue").GetString().ShouldBe("42"));
+    }
+
     private static JsonElement Attribute(JsonElement item, string key) =>
         item.GetProperty("attributes").EnumerateArray()
             .Single(attribute => attribute.GetProperty("key").GetString() == key)

@@ -514,6 +514,57 @@ follow. `aspire-addon infra adopt` does not bring it to an existing scaffold: co
 `IaC/workbooks/telemetry.json`, the Workbook resource at the end of `IaC/observability.tf` and the
 last four outputs in `IaC/outputs.tf` from a fresh scaffold.
 
+**Structured logs.** Every record, from the services and from both front ends through the relay,
+carries the same fields: under `customDimensions` here, as attributes in the dashboard, and as
+properties on the console, which writes compact JSON (CLEF) in Azure and readable text elsewhere. The
+console keeps Warning and above in Production either way.
+
+| Field | Value | Present |
+| --- | --- | --- |
+| `trace_id` | W3C trace id, 32 hex | when an Activity is current |
+| `span_id` | W3C span id, 16 hex | when an Activity is current |
+| `trace_flags` | `00` or `01` | when an Activity is current |
+| `parent_span_id` | the current span's parent, 16 hex | when the span has a parent |
+| `entity.type` | the entity's type name, such as `Widget` | inside an entity scope |
+| `entity.id` | its surrogate key, **always a string** (a composite key is joined `a\|b`) | inside an entity scope with an id |
+| `entity.related` | a list of `Type:id` for the other entities involved | when the code names them |
+| `enduser.id` | the token's `oid`, else its `sub` | when a user is signed in |
+
+The trace fields come from `TraceContextEnricher` and `enduser.id` from `EnduserEnricher`, both in
+`src/template.servicedefaults/`. No name, email or UPN is ever logged. App Insights also maps each
+record's own trace context to `operation_Id` and `operation_ParentId`, which is what the Workbook joins
+on. The `entity.*` fields come from an entity scope:
+
+- **`EntityScopeFilter`** (`src/template.api/Telemetry/`) opens one for any action with an `{id}` route
+  value, on a controller marked `[EntityType(typeof(Widget))]`, so `GET /Widgets/{id}` logs under
+  the entity without naming it.
+- **`logger.ForEntity(...)`** opens one anywhere else: around a create once the row has its id, with
+  related entities as `(Type, id)` pairs, or for a list with no id (`ForEntity("Widget")`). The
+  front ends have the same helper: `logError(message, { entity })` in React's `src/lib/telemetry.ts`,
+  and `ForEntity` in `Template.Blazor.Maui.Pages/Telemetry/`.
+
+The same `entity.*` and `enduser.id` values are tags on the request span, so `requests` filter by
+entity too. A database dependency is a child span without them; it joins through `operation_Id`.
+
+The API logs through `[LoggerMessage]` methods (`src/template.api/Controllers/WidgetLog.cs`), and
+CA2254 and CA1848 are build errors (`Directory.Build.props`). Writes and misses log at Information,
+reads at Debug. `GET /api/Widgets/0` is a deterministic miss: a 404 and one Information line,
+`Widget not found`, under `entity.id = "0"` and that request's `operation_Id`.
+
+**Entity history**, the Workbook's last section, is that query for any entity: set **Entity type**
+(`Widget`) and, optionally, **Entity id**. The type comes from the parameter, so the section works
+for every resource a scaffold adds.
+
+```kusto
+// Everything logged or traced about Widget 42, newest first.
+union traces, requests, dependencies, exceptions
+| where tostring(customDimensions["entity.type"]) == "Widget"
+    and tostring(customDimensions["entity.id"]) == "42"
+| project timestamp, itemType, message, name, operation_Id,
+          trace_id = tostring(customDimensions["trace_id"])
+| order by timestamp desc
+```
+
 Everything is kept by default: the sampling ratio is 1.0, so no Information log is dropped with an
 unsampled trace. Set `AzureMonitor__SamplingRatio` (for example `0.25`) on a busy environment; the
 workspace's daily ingestion cap is the backstop.
@@ -528,6 +579,14 @@ and not `servicedefaults` or the API. By hand, from a fresh scaffold of the same
 `Serilog` sections of each service's `appsettings*.json`; then regenerate the contract and clients.
 For React, `src/lib/telemetry.ts` and `telemetryTarget.ts` and the two `-otlp-http` exporters; for
 Blazor, `Template.Blazor.Maui.Pages/Telemetry/`.
+
+Structured logs add to that list: in `src/template.servicedefaults/`, `TraceContextEnricher.cs`,
+`EnduserEnricher.cs`, `EnduserId.cs`, `EntityScope.cs` and the changes to `SerilogExtensions.cs` and
+`Extensions.cs`; in the API, `Telemetry/EntityTypeAttribute.cs`, `Telemetry/EntityScopeFilter.cs`, the
+filter line in `Program.cs`, `Controllers/WidgetLog.cs` and `GetWidget`; the two analyzer settings in
+`Directory.Build.props`, then converting whatever the build flags to `[LoggerMessage]`. A scaffold that
+already has its own `GET /<Resources>/{id}` keeps it: add `[EntityType]` to its controller and a
+not-found log instead of copying `GetWidget`.
 
 ## The MVVM framework
 

@@ -70,11 +70,22 @@ public static class Extensions
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
                     .AddAspNetCoreInstrumentation(tracing =>
+                    {
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath)
-                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
-                    )
+                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath);
+
+                        // Who acted, on the request span as well as its logs. On the response rather
+                        // than the request, because authentication has run by then.
+                        tracing.EnrichWithHttpResponse = (activity, response) =>
+                        {
+                            if (EnduserId.From(response.HttpContext.User) is { } id)
+                            {
+                                activity.SetTag(EnduserId.Key, id);
+                            }
+                        };
+                    })
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation();

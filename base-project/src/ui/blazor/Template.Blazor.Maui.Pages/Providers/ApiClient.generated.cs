@@ -37,6 +37,27 @@ namespace Template.Blazor.Maui.Pages.Providers
         [Get("/Widgets")]
         Task<ICollection<Widget>> GetWidgets(CancellationToken cancellationToken = default);
 
+        /// <summary>Get one widget by its id</summary>
+        /// <param name="id">id parameter</param>
+        /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>404</term>
+        /// <description>Not Found</description>
+        /// </item>
+        /// </list>
+        /// </exception>
+        [Headers("Accept: application/json, text/json, text/plain, application/problem+json")]
+        [Get("/Widgets/{id}")]
+        Task<Widget> GetWidget(int id, CancellationToken cancellationToken = default);
+
         /// <summary>Where a client signs in, or that it does not need to</summary>
         /// <param name="cancellationToken">The cancellation token to cancel the request.</param>
         /// <returns>OK</returns>

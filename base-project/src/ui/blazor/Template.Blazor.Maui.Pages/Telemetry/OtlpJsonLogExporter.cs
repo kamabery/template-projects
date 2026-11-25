@@ -58,6 +58,20 @@ public sealed class OtlpJsonLogExporter(Func<HttpClient> createClient, Uri relay
         var attributes = (record.Attributes ?? [])
             .Where(attribute => attribute.Key != OriginalFormat)
             .ToList();
+
+        // Scope values as attributes, as the OTLP exporter does for the dashboard: an entity scope
+        // (EntityScope.ForEntity) is how a log names what it is about, and the relay reads only
+        // attributes.
+        record.ForEachScope(static (scope, list) =>
+        {
+            foreach (var value in scope)
+            {
+                if (value.Key != OriginalFormat && !string.IsNullOrEmpty(value.Key))
+                {
+                    list.Add(value);
+                }
+            }
+        }, attributes);
         if (record.Exception is { } exception)
         {
             attributes.Add(new("exception.type", exception.GetType().FullName));

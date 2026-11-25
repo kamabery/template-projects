@@ -143,6 +143,22 @@ public sealed class BrowserTelemetryRelayTests : IDisposable
             () => log.Attributes[BrowserTelemetryRelay.SourceAttribute].ShouldBe(BrowserTelemetryRelay.SourceValue));
     }
 
+    [Fact]
+    public void LogRecord_KeepsItsEntityAttributes()
+    {
+        // The front ends name an entity with the API's own keys, so the relay must pass them on as
+        // they are for one query to cover the browser and the server.
+        _relay.RelayLogs(Json($$$"""
+            {"resourceLogs":[{"scopeLogs":[{"logRecords":[{"severityNumber":17,"body":{"stringValue":"Loading failed"},
+              "attributes":[{"key":"entity.type","value":{"stringValue":"Widget"}},{"key":"entity.id","value":{"stringValue":"42"}}],
+              "traceId":"{{{TraceId}}}","spanId":"{{{SpanId}}}"}]}]}]}
+            """));
+
+        var log = _logs.Records.ShouldHaveSingleItem();
+        log.Attributes["entity.type"].ShouldBe("Widget");
+        log.Attributes["entity.id"].ShouldBe("42");
+    }
+
     [Theory]
     [InlineData(0, LogLevel.Information)]
     [InlineData(5, LogLevel.Debug)]

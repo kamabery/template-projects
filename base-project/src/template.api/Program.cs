@@ -1,6 +1,7 @@
 using Microsoft.OpenApi;
 using template.api.Services;
 using template.api.Startup;
+using template.api.Telemetry;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,9 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+// The filter puts entity.type and entity.id on every log of an action with an {id} - see
+// Telemetry/EntityScopeFilter.cs.
+builder.Services.AddControllers(options => options.Filters.Add<EntityScopeFilter>());
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 // The transformer is not cosmetic - it is what makes the generated clients usable. The .NET
 // generator describes an int32 as `"type": ["integer", "string"]`, which is legal JSON Schema
